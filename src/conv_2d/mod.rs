@@ -1,7 +1,7 @@
-use std::{fmt::Display, ops::Add};
-
-use ndarray::{prelude::*, IntoDimension};
+use ndarray::prelude::*;
 use num::traits::NumAssign;
+
+mod fft;
 
 pub trait Conv2DExt<T: NumAssign + Copy> {
     type Output;
@@ -9,21 +9,21 @@ pub trait Conv2DExt<T: NumAssign + Copy> {
 
     fn conv_2d<SK: ndarray::Data<Elem = T>>(
         &self,
-        kernel: ArrayBase<SK, Self::IxD>,
+        kernel: &ArrayBase<SK, Self::IxD>,
     ) -> Option<Self::Output>;
 }
 
 impl<T, S> Conv2DExt<T> for ArrayBase<S, Ix2>
 where
     S: ndarray::DataMut<Elem = T>,
-    T: Copy + Clone + NumAssign + std::fmt::Debug + Display + Send + Sync,
+    T: Copy + Clone + NumAssign + std::fmt::Debug + std::fmt::Display + Send + Sync,
 {
     type Output = ndarray::Array<T, Ix2>;
     type IxD = Ix2;
 
     fn conv_2d<SK: ndarray::Data<Elem = T>>(
         &self,
-        kernel: ArrayBase<SK, Self::IxD>,
+        kernel: &ArrayBase<SK, Self::IxD>,
     ) -> Option<Self::Output> {
         let padding = (kernel.shape()[0] / 2 * 2, kernel.shape()[1] / 2 * 2);
         let mut buf =
@@ -52,25 +52,42 @@ where
             }
         }
 
-        // let offset = (-(kernel.shape()[1] as isize) / 2..kernel.shape()[1] as isize)
-        //     .map(|r| {
-        //         (-(kernel.shape()[0] as isize) / 2..kernel.shape()[0] as isize)
-        //             .map(|c| r * self.shape()[1] as isize + c)
-        //     })
-        //     .flatten()
-        //     .collect::<Vec<_>>();
-
-
         unsafe {
-            use ndarray::parallel::prelude::*;
-
-            for (i, item) in sub_buf.iter_mut().enumerate() {
-                let mut temp = T::zero();
-                for (o, k) in offset.iter() {
-                    temp += *(item as *mut T).offset(*o) * *k
-                }
-                *ret.as_mut_ptr().add(i) = temp;
+            if self.len() >= 32 * 32 {
+                ndarray::Zip::from(&mut ret)
+                    .and(&sub_buf)
+                    .par_for_each(|r, s| {
+                        let mut temp = T::zero();
+                        for (o, k) in offset.iter() {
+                            temp += *(s as *const T).offset(*o) * *k
+                        }
+                        *r = temp;
+                    });
+            } else {
+                ndarray::Zip::from(&mut ret).and(&sub_buf).for_each(|r, s| {
+                    let mut temp = T::zero();
+                    for (o, k) in offset.iter() {
+                        temp += *(s as *const T).offset(*o) * *k
+                    }
+                    *r = temp;
+                });
             }
+
+            // ret.zip_mut_with(&sub_buf, |r, s| {
+            //     let mut temp = T::zero();
+            //     for (o, k) in offset.iter() {
+            //         temp += *(s as *const T).offset(*o) * *k
+            //     }
+            //     *r = temp;
+            // });
+
+            // for (i, item) in sub_buf.iter_mut().enumerate() {
+            //     let mut temp = T::zero();
+            //     for (o, k) in offset.iter() {
+            //         temp += *(item as *mut T).offset(*o) * *k
+            //     }
+            //     *ret.as_mut_ptr().add(i) = temp;
+            // }
         }
 
         // dbg!(&buf);
@@ -145,10 +162,25 @@ mod tests {
         // ];
         let kernel = array![[1, 0, 1], [0, 1, 0], [1, 0, 1]];
 
-        assert_ne!(dbg!(input_pixels.conv_2d(kernel.view())), None);
+        assert_ne!(dbg!(input_pixels.conv_2d(&kernel)), None);
         assert_eq!(
-            dbg!(input_pixels.conv_2d(kernel.view())).unwrap(),
+            dbg!(input_pixels.conv_2d(&kernel)).unwrap(),
             output_pixels
         );
+    }
+
+    #[test]
+    fn test_stride() {
+        let input_pixels = array![
+            [1, 1, 1, 0, 0],
+            [0, 1, 1, 1, 0],
+            [0, 0, 1, 1, 1],
+            [0, 0, 1, 1, 0],
+            [0, 1, 1, 0, 0],
+        ];
+
+        let a = input_pixels.slice(s!(..,..; 2));
+
+        dbg!(a);
     }
 }

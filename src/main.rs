@@ -13,7 +13,7 @@ fn main() {
         let k = Array::random((9, 9), Uniform::new(0., 1.));
 
         let now = Instant::now();
-        x.conv_2d(k.view());
+        x.conv_2d(&k);
         small_duration += now.elapsed().as_nanos();
     }
 
