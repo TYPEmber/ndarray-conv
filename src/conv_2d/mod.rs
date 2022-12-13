@@ -1,27 +1,44 @@
 use ndarray::prelude::*;
-use num::traits::NumAssign;
+use num::traits::{AsPrimitive, FromPrimitive, NumAssign};
 
 mod fft;
 
-pub trait Conv2DExt<T: NumAssign + Copy> {
+pub trait Conv2DExt<TK: NumAssign + Copy> {
     type Output;
     type IxD;
 
-    fn conv_2d<SK: ndarray::Data<Elem = T>>(
+    fn conv_2d<SK: ndarray::Data<Elem = TK>>(
         &self,
         kernel: &ArrayBase<SK, Self::IxD>,
     ) -> Option<Self::Output>;
 }
 
-impl<T, S> Conv2DExt<T> for ArrayBase<S, Ix2>
+impl<T, TK, S> Conv2DExt<TK> for ArrayBase<S, Ix2>
 where
     S: ndarray::DataMut<Elem = T>,
-    T: Copy + Clone + NumAssign + std::fmt::Debug + std::fmt::Display + Send + Sync,
+    T: Copy
+        + Clone
+        + NumAssign
+        + std::fmt::Debug
+        + std::fmt::Display
+        + Send
+        + Sync
+        + FromPrimitive
+        + AsPrimitive<f64>,
+    TK: Copy
+        + Clone
+        + NumAssign
+        + std::fmt::Debug
+        + std::fmt::Display
+        + Send
+        + Sync
+        + FromPrimitive
+        + AsPrimitive<f64>,
 {
     type Output = ndarray::Array<T, Ix2>;
     type IxD = Ix2;
 
-    fn conv_2d<SK: ndarray::Data<Elem = T>>(
+    fn conv_2d<SK: ndarray::Data<Elem = TK>>(
         &self,
         kernel: &ArrayBase<SK, Self::IxD>,
     ) -> Option<Self::Output> {
@@ -57,19 +74,19 @@ where
                 ndarray::Zip::from(&mut ret)
                     .and(&sub_buf)
                     .par_for_each(|r, s| {
-                        let mut temp = T::zero();
+                        let mut temp = 0.0f64;
                         for (o, k) in offset.iter() {
-                            temp += *(s as *const T).offset(*o) * *k
+                            temp += (*(s as *const T).offset(*o)).as_() * k.as_()
                         }
-                        *r = temp;
+                        *r = T::from_f64(temp).unwrap();
                     });
             } else {
                 ndarray::Zip::from(&mut ret).and(&sub_buf).for_each(|r, s| {
-                    let mut temp = T::zero();
+                    let mut temp = 0.0f64;
                     for (o, k) in offset.iter() {
-                        temp += *(s as *const T).offset(*o) * *k
+                        temp += (*(s as *const T).offset(*o)).as_() * k.as_()
                     }
-                    *r = temp;
+                    *r = T::from_f64(temp).unwrap();
                 });
             }
 
@@ -163,10 +180,7 @@ mod tests {
         let kernel = array![[1, 0, 1], [0, 1, 0], [1, 0, 1]];
 
         assert_ne!(dbg!(input_pixels.conv_2d(&kernel)), None);
-        assert_eq!(
-            dbg!(input_pixels.conv_2d(&kernel)).unwrap(),
-            output_pixels
-        );
+        assert_eq!(dbg!(input_pixels.conv_2d(&kernel)).unwrap(), output_pixels);
     }
 
     #[test]
