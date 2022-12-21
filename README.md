@@ -2,7 +2,13 @@
 
 ndarray-conv is a crate that provides a fast convolutions library in pure Rust.
 
-Inspired by ndarray-vision (https://github.com/rust-cv/ndarray-vision) and convolutions-rs (https://github.com/Conzel/convolutions-rs#readme)
+Inspired by
+
+ndarray-vision (https://github.com/rust-cv/ndarray-vision)
+
+convolutions-rs (https://github.com/Conzel/convolutions-rs#readme)
+
+pocketfft (https://github.com/mreineck/pocketfft)
 
 ndarray-conv is still under heavily developing, the first stage aims to provide a fast conv_2d func for ndarray::Array2<T>.
 
