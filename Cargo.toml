@@ -9,6 +9,9 @@ edition = "2021"
 ndarray = {version = "0.15", features = ["rayon"]}
 num = "0.4"
 rustfft = "6.1"
+ndrustfft = "0.3"
+realfft = "3.2"
+transpose = "0.2"
 
 # [dev-dependencies]
 ndarray-rand = "*"
