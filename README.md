@@ -15,19 +15,24 @@ ndarray-conv is still under heavily developing, the first stage aims to provide 
 ## First Stage
 
 - [x] basic conv_2d
-- [x] use rayon to accelerate big matrix's conv_2d computation
-- [ ] use fft to accelerate big kernel's conv_2d computation
+- [x] use fft to accelerate big kernel's conv_2d computation
 
 ## Roughly Bench
 
-**without rayon**
+**conv_2d**
 
 2x-4x faster than ndarray-vision and 4x-10x faster than convolutions-rs.
-2x-4x slower than opencv with small kernel (size < 11)
+2x slower than opencv with small kernel (size < 11)
 
-**with rayon**
 
-2x faster than opencv with small kernel (size < 11)
+**conv_2d_fft**
+
+10x~ faster than ndarray-vision and convolutions-rs
+
+as fast as opencv on large data and kernel (2000, 5000) * (21, 41)
+
+2x faster than opencv on much larger data and kernel
+
 
 ## Example
 
@@ -38,7 +43,7 @@ ndarray-conv is still under heavily developing, the first stage aims to provide 
 
 ```rust
 fn main() {
-    use ndarray_conv::conv_2d::*;
+    use ndarray_conv::*;
     use ndarray::prelude::*;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
