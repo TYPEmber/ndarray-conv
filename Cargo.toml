@@ -17,4 +17,4 @@ realfft = "3.2"
 transpose = "0.2"
 
 # [dev-dependencies]
-ndarray-rand = "*"
+ndarray-rand = "0.14"
