@@ -13,4 +13,7 @@ mod tests {
     }
 }
 
-pub mod conv_2d;
+mod conv_2d;
+
+pub use conv_2d::Conv2DExt;
+pub use conv_2d::fft::Conv2DFftExt;

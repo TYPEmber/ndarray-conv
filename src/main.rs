@@ -1,8 +1,6 @@
-use ndarray_conv::conv_2d::fft::Conv2DFftExt;
-
 fn main() {
     use ndarray::prelude::*;
-    use ndarray_conv::conv_2d::*;
+    use ndarray_conv::*;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
     use std::time::Instant;
