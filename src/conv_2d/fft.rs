@@ -47,10 +47,15 @@ where
 
     let data_spec = fft_2d::forward(&mut data_ext, &mut rp, &mut cp);
 
+    let kernel = Array2::from_shape_vec(
+        kernel.dim(),
+        kernel.as_slice().unwrap().iter().rev().copied().collect(),
+    )
+    .unwrap();
     let mut kernel_ext = Array2::zeros(fft_shape);
     kernel_ext
         .slice_mut(s![..kernel.shape()[0], ..kernel.shape()[1]])
-        .assign(kernel);
+        .assign(&kernel);
     let kernel_spec = fft_2d::forward(&mut kernel_ext, &mut rp, &mut cp);
 
     let mut mul_spec = data_spec * kernel_spec;
@@ -80,8 +85,9 @@ pub fn good_size_cc(n: usize) -> usize {
 
 pub fn good_size_rr(n: usize) -> usize {
     let n = n / 2;
+    let res = n % 2;
 
-    good_size_cc(n) * 2
+    (good_size_cc(n) + res) * 2
 }
 
 pub fn good_size_c(n: usize) -> usize {
@@ -252,8 +258,7 @@ mod tests {
         }
 
         // let kernel = array![[0, 1, 0], [0, 0, 0], [1, 0, 0], [1, 0, 1]];
-        let mut kernel = array![[1, 0, 1], [0, 0, 1], [0, 1, 0]];
-        kernel.as_slice_mut().unwrap().reverse();
+        let kernel = array![[1, 0, 1], [0, 0, 1], [0, 1, 0]];
 
         dbg!(input_pixels
             .mapv(|x| x as f64)
