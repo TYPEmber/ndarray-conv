@@ -37,7 +37,7 @@ as fast as opencv on large data and kernel (2000, 5000) * (21, 41)
 ## Example
 
 ```rust
-    use ndarray_conv::conv_2d::*;
+    use ndarray_conv::*;
     x.conv_2d(&k);
 ```
 
