@@ -3,12 +3,12 @@ use num::traits::*;
 use std::fmt::{Debug, Display};
 use transpose::transpose;
 pub fn inverse<T>(
-    arr: &mut Array2<rustfft::num_complex::Complex32>,
-    r_planner: &mut realfft::RealFftPlanner<f32>,
-    c_planner: &mut rustfft::FftPlanner<f32>,
+    arr: &mut Array2<rustfft::num_complex::Complex<T>>,
+    r_planner: &mut realfft::RealFftPlanner<T>,
+    c_planner: &mut rustfft::FftPlanner<T>,
 ) -> Array2<T>
 where
-    T: Copy + Clone + NumAssign + Debug + Display + Send + Sync + FromPrimitive,
+    T: rustfft::FftNum,
 {
     // return Array2::zeros((1,1));
 
@@ -29,7 +29,7 @@ where
 
     {
         let mut input_t = Array2::zeros((arr.shape()[1], arr.shape()[0]));
-
+        
         transpose(
             arr.as_slice().unwrap(),
             input_t.as_slice_mut().unwrap(),
@@ -56,12 +56,13 @@ where
         ndarray::Zip::from(input_t.rows_mut())
             .and(output_t.rows_mut())
             .for_each(|mut row, mut output| {
-                unsafe { row.uget_mut(0).im = 0.0 };
-                unsafe { row.uget_mut(row.len() - 1).im = 0.0 };
+                unsafe { row.uget_mut(0).im = T::zero() };
+                unsafe { row.uget_mut(row.len() - 1).im = T::zero() };
                 // row.last_mut().unwrap().im = 0.0;
                 ifft_row
                     .process(row.as_slice_mut().unwrap(), output.as_slice_mut().unwrap())
                     .unwrap();
+                // output.map_mut(|x| *x = x.div(len));
             });
     }
 
@@ -78,20 +79,20 @@ where
     //         });
     // }
 
-    // output_t.mapv(|x| T::from_f32((x / output_t.len() as f32).round()).unwrap())
-    output_t.mapv(|x| T::from_f32(x / output_t.len() as f32 + 0.5).unwrap())
+    let len = T::from_usize(output_t.len()).unwrap();
+    output_t.map_mut(|x| *x = x.div(len));
+    output_t
 }
 
-pub fn forward<T, S: ndarray::Data<Elem = T>>(
-    arr: &ArrayBase<S, Ix2>,
-    r_planner: &mut realfft::RealFftPlanner<f32>,
-    c_planner: &mut rustfft::FftPlanner<f32>,
-) -> Array2<rustfft::num_complex::Complex32>
+pub fn forward<T, S: ndarray::DataMut<Elem = T>>(
+    input: &mut ArrayBase<S, Ix2>,
+    r_planner: &mut realfft::RealFftPlanner<T>,
+    c_planner: &mut rustfft::FftPlanner<T>,
+) -> Array2<rustfft::num_complex::Complex<T>>
 where
-    T: Copy + Clone + NumAssign + Debug + Display + Send + Sync + AsPrimitive<f32>,
+    T: rustfft::FftNum,
 {
-    let (nx, ny) = arr.dim();
-    let mut input = arr.mapv(|x| x.as_());
+    let (nx, ny) = input.dim();
     let mut output = Array2::zeros((nx, ny / 2 + 1));
     let fft_row = r_planner.plan_fft_forward(ny);
     let fft_col = c_planner.plan_fft_forward(nx);
@@ -114,7 +115,13 @@ where
     //     });
 
     let output = output.into_raw_vec();
-    let mut output_t = vec![rustfft::num_complex::Complex::default(); output.len()];
+    let mut output_t = vec![
+        rustfft::num_complex::Complex {
+            re: T::zero(),
+            im: T::zero()
+        };
+        output.len()
+    ];
     transpose::transpose(&output, &mut output_t, ny / 2 + 1, nx);
 
     fft_col.process(&mut output_t);
@@ -138,7 +145,7 @@ pub fn inverse_f64<T>(
     c_planner: &mut rustfft::FftPlanner<f64>,
 ) -> Array2<T>
 where
-    T: Copy + Clone + NumAssign + Debug + Display + Send + Sync + FromPrimitive,
+    T: Copy + Clone + NumAssign + Send + Sync + FromPrimitive,
     f64: std::convert::From<T>,
 {
     let ifft_row = r_planner.plan_fft_inverse((arr.shape()[0] - 1) * 2);

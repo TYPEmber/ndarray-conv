@@ -1,14 +1,94 @@
 use std::fmt::Display;
 
-use ndarray::prelude::*;
-use num::{traits::AsPrimitive, traits::NumAssign, ToPrimitive};
+use ndarray::{prelude::*, Data, DataOwned};
+use num::{traits::AsPrimitive, traits::NumAssign, Float, ToPrimitive};
 use rustfft::num_traits::FromPrimitive;
 
 use super::{c2cfft, fft_2d};
 
+pub trait Conv2DFftExt<T: rustfft::FftNum + Float, S: Data> {
+    fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>>;
+}
+
+impl<S, T> Conv2DFftExt<T, S> for ArrayBase<S, Ix2>
+where
+    S: Data<Elem = T>,
+    T: rustfft::FftNum + Float,
+{
+    fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>> {
+        let (shape, mut ret) = conv_2d_fft_inner(self, kernel);
+        // Some(ret.slice_mut(s!(..shape.0; 2, ..shape.1; 2)).to_owned())
+        Some(ret.slice_mut(s!(..shape.0, ..shape.1)).to_owned())
+    }
+}
+
+fn conv_2d_fft_inner<S, T>(
+    data: &ArrayBase<S, Ix2>,
+    kernel: &ArrayBase<S, Ix2>,
+) -> ((usize, usize), Array2<T>)
+where
+    S: Data<Elem = T>,
+    T: rustfft::FftNum + Float,
+{
+    let output_shape = (
+        data.shape()[0] + kernel.shape()[0] - 1,
+        data.shape()[1] + kernel.shape()[1] - 1,
+    );
+
+    let fft_shape = (good_size_c(output_shape.0), good_size_r(output_shape.1));
+
+    let mut data_ext = Array2::zeros(fft_shape);
+    data_ext
+        .slice_mut(s!(..data.shape()[0], ..data.shape()[1]))
+        .assign(data);
+
+    let mut rp = realfft::RealFftPlanner::new();
+    let mut cp = rustfft::FftPlanner::new();
+
+    let data_spec = fft_2d::forward(&mut data_ext, &mut rp, &mut cp);
+
+    let mut kernel_ext = Array2::zeros(fft_shape);
+    kernel_ext
+        .slice_mut(s![..kernel.shape()[0], ..kernel.shape()[1]])
+        .assign(kernel);
+    let kernel_spec = fft_2d::forward(&mut kernel_ext, &mut rp, &mut cp);
+
+    let mut mul_spec = data_spec * kernel_spec;
+
+    (
+        output_shape,
+        fft_2d::inverse(&mut mul_spec, &mut rp, &mut cp),
+    )
+}
+
+pub fn good_size_cc(n: usize) -> usize {
+    let mut best_fac = n.next_power_of_two();
+
+    loop {
+        let new_fac = best_fac / 4 * 3;
+        match new_fac.cmp(&n) {
+            std::cmp::Ordering::Less => break,
+            std::cmp::Ordering::Equal => return n,
+            std::cmp::Ordering::Greater => {
+                best_fac = new_fac;
+            }
+        }
+    }
+
+    best_fac
+}
+
+pub fn good_size_rr(n: usize) -> usize {
+    let n = n / 2;
+
+    good_size_cc(n) * 2
+}
+
 pub fn good_size_c(n: usize) -> usize {
     if n <= 12 {
         return n;
+    } else if n < 3000 {
+        return good_size_cc(n);
     }
 
     let mut best_fac = 2 * n;
@@ -51,6 +131,8 @@ pub fn good_size_c(n: usize) -> usize {
 pub fn good_size_r(n: usize) -> usize {
     if n <= 6 {
         return n;
+    } else if n < 3000 {
+        return good_size_rr(n);
     }
 
     let mut best_fac = 2 * n;
@@ -82,50 +164,6 @@ pub fn good_size_r(n: usize) -> usize {
     best_fac
 }
 
-pub fn conv_2d<T, S: ndarray::Data<Elem = T>, SM: ndarray::Data<Elem = T>>(
-    data: &ArrayBase<S, Ix2>,
-    kernel: &ArrayBase<S, Ix2>,
-) -> Option<Array2<T>>
-where
-    T: Copy
-        + Clone
-        + NumAssign
-        + std::fmt::Debug
-        + Display
-        + Send
-        + Sync
-        + FromPrimitive
-        + ToPrimitive
-        + AsPrimitive<f32>,
-
-    f64: std::convert::From<T>,
-{
-    let output_shape = (
-        good_size_c(data.shape()[0] + kernel.shape()[0] - 1),
-        good_size_r(data.shape()[1] + kernel.shape()[1] - 1),
-    );
-
-    let mut data_ext = Array2::zeros(output_shape);
-    data_ext
-        .slice_mut(s!(..data.shape()[0], ..data.shape()[1]))
-        .assign(data);
-
-    let mut rp = realfft::RealFftPlanner::new();
-    let mut cp = rustfft::FftPlanner::new();
-
-    let data_spec = fft_2d::forward(&data_ext, &mut rp, &mut cp);
-
-    let mut kernel_ext = Array2::zeros(output_shape);
-    kernel_ext
-        .slice_mut(s![..kernel.shape()[0], ..kernel.shape()[1]])
-        .assign(kernel);
-    let kernel_spec = fft_2d::forward(&kernel_ext, &mut rp, &mut cp);
-
-    let mut mul_spec = data_spec * kernel_spec;
-
-    Some(fft_2d::inverse(&mut mul_spec, &mut rp, &mut cp))
-}
-
 pub fn conv_2d_c2c<T, S: ndarray::Data<Elem = T>, SM: ndarray::Data<Elem = T>>(
     data: &ArrayBase<S, Ix2>,
     kernel: &ArrayBase<S, Ix2>,
@@ -145,11 +183,13 @@ where
     f64: std::convert::From<T>,
 {
     let output_shape = (
-        good_size_c(data.shape()[0] + kernel.shape()[0] - 1),
-        good_size_c(data.shape()[1] + kernel.shape()[1] - 1),
+        data.shape()[0] + kernel.shape()[0] - 1,
+        data.shape()[1] + kernel.shape()[1] - 1,
     );
 
-    let mut data_ext = Array2::zeros(output_shape);
+    let fft_shape = (good_size_c(output_shape.0), good_size_c(output_shape.1));
+
+    let mut data_ext = Array2::zeros(fft_shape);
     data_ext
         .slice_mut(s!(..data.shape()[0], ..data.shape()[1]))
         .assign(data);
@@ -162,7 +202,7 @@ where
     // let data_spec = fft_2d::forward(&data_ext, &mut rp, &mut cp);
     let data_spec = c2cfft::forward(&data_ext, &mut planner);
 
-    let mut kernel_ext = Array2::zeros(output_shape);
+    let mut kernel_ext = Array2::zeros(fft_shape);
     kernel_ext
         .slice_mut(s![..kernel.shape()[0], ..kernel.shape()[1]])
         .assign(kernel);
@@ -215,12 +255,11 @@ mod tests {
         let mut kernel = array![[1, 0, 1], [0, 0, 1], [0, 1, 0]];
         kernel.as_slice_mut().unwrap().reverse();
 
-        dbg!(&conv_2d::<
-            i32,
-            ndarray::OwnedRepr<i32>,
-            ndarray::OwnedRepr<i32>,
-        >(&input_pixels, &kernel));
-
+        dbg!(input_pixels
+            .mapv(|x| x as f64)
+            .conv_2d_fft(&kernel.mapv(|x| x as f64))
+            .unwrap()
+            .mapv(|x| x.round() as i32));
         // dbg!(&conv_2d_c2c::<
         //     f64,
         //     ndarray::OwnedRepr<f64>,
@@ -230,9 +269,11 @@ mod tests {
 
     #[test]
     fn test_best_fft_len() {
-        let mut n = 93059;
-        // let mut n = 2020;
+        // let mut n = 93059;
+        let mut n = 5020;
         dbg!(good_size_c(n));
+        dbg!(good_size_cc(n));
         dbg!(good_size_r(n));
+        dbg!(good_size_rr(n));
     }
 }
