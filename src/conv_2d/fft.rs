@@ -17,8 +17,14 @@ where
 {
     fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>> {
         let (shape, mut ret) = conv_2d_fft_inner(self, kernel);
-        // Some(ret.slice_mut(s!(..shape.0; 2, ..shape.1; 2)).to_owned())
-        Some(ret.slice_mut(s!(..shape.0, ..shape.1)).to_owned())
+        // Some(ret.slice_mut(s!(..shape.0, ..shape.1)).to_owned())
+        Some(
+            ret.slice_mut(s!(
+                (kernel.shape()[0] - 1) / 2..(kernel.shape()[0] - 1) / 2 + self.shape()[0],
+                (kernel.shape()[1] - 1) / 2..(kernel.shape()[1] - 1) / 2 + self.shape()[1],
+            ))
+            .to_owned(),
+        )
     }
 }
 
@@ -84,8 +90,8 @@ pub fn good_size_cc(n: usize) -> usize {
 }
 
 pub fn good_size_rr(n: usize) -> usize {
-    let n = n / 2;
     let res = n % 2;
+    let n = n / 2;
 
     (good_size_cc(n) + res) * 2
 }
@@ -258,7 +264,11 @@ mod tests {
         }
 
         // let kernel = array![[0, 1, 0], [0, 0, 0], [1, 0, 0], [1, 0, 1]];
-        let kernel = array![[1, 0, 1], [0, 0, 1], [0, 1, 0]];
+        let kernel = array![
+            [1, 0, 1, 0],
+            [0, 0, 1, 0],
+            [0, 1, 0, 0],
+        ];
 
         dbg!(input_pixels
             .mapv(|x| x as f64)
