@@ -1,6 +1,6 @@
 use std::vec;
-
 use ndarray::prelude::*;
+
 
 pub fn conv_2d<T: num::traits::NumAssign + Copy>(data: &Array2<T>, kernel: &Array2<T>) -> Array2<T> {
     // conv with same size output
@@ -34,7 +34,7 @@ pub fn conv_2d<T: num::traits::NumAssign + Copy>(data: &Array2<T>, kernel: &Arra
                 continue;
             }
 
-            offsets.push((i * new_h + j, kernel[(i, j)]));
+            offsets.push((i * new_w + j, kernel[(i, j)]));
         }
     }
     // dbg!(input_offset);
