@@ -7,8 +7,10 @@ mod fft_2d;
 pub mod naive_conv;
 pub mod ndrustfft;
 
+use super::ConvType;
+
 pub trait Conv2DExt<T: NumAssign + Copy, S: ndarray::Data> {
-    fn conv_2d(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>>;
+    fn conv_2d(&self, kernel: &ArrayBase<S, Ix2>, conv_type: ConvType<2>) -> Option<Array2<T>>;
 }
 
 impl<T, S> Conv2DExt<T, S> for ArrayBase<S, Ix2>
@@ -16,7 +18,9 @@ where
     S: ndarray::Data<Elem = T>,
     T: Copy + NumAssign,
 {
-    fn conv_2d(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>> {
+    fn conv_2d(&self, kernel: &ArrayBase<S, Ix2>, conv_type: ConvType<2>) -> Option<Array2<T>> {
+        let arr = [0; 5];
+
         // conv with same size output
         let (h, w) = (self.shape()[0], self.shape()[1]);
         let (kernel_h, kernel_w) = (kernel.shape()[0], kernel.shape()[1]);
@@ -96,7 +100,7 @@ mod tests {
         // let kernel = array![[1, 0, 1], [1, 1, 0], [0, 0, 1], [0, 0, 0]];
         dbg!(&kernel, &kernel.shape(), &kernel.dim());
 
-        assert_ne!(dbg!(input_pixels.conv_2d(&kernel)), None);
+        assert_ne!(dbg!(input_pixels.conv_2d(&kernel, ConvType::Same)), None);
         // assert_eq!(dbg!(input_pixels.conv_2d(&kernel)).unwrap(), output_pixels);
     }
 

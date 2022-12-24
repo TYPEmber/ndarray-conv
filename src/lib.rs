@@ -15,5 +15,21 @@ mod tests {
 
 mod conv_2d;
 
-pub use conv_2d::Conv2DExt;
 pub use conv_2d::fft::Conv2DFftExt;
+pub use conv_2d::Conv2DExt;
+
+
+pub enum ConvType<const N: usize> {
+    Full,
+    Same,
+    Valid,
+    Custom([usize; N], [usize; N]),
+    // Custom(&'a [usize], &'a [usize]),
+}
+
+// pub enum BorderType<'a, T: num::traits::NumAssign + Copy> {
+//     Zero,
+//     Const(&'a [T]),
+//     Reflect(&'a [bool]),
+//     Warp(&'a [bool]),
+// }
