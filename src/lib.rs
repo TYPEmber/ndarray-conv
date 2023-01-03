@@ -18,7 +18,6 @@ mod conv_2d;
 pub use conv_2d::fft::Conv2DFftExt;
 pub use conv_2d::Conv2DExt;
 
-
 pub enum ConvType<const N: usize> {
     Full,
     Same,
@@ -27,9 +26,21 @@ pub enum ConvType<const N: usize> {
     // Custom(&'a [usize], &'a [usize]),
 }
 
-// pub enum BorderType<'a, T: num::traits::NumAssign + Copy> {
-//     Zero,
-//     Const(&'a [T]),
-//     Reflect(&'a [bool]),
-//     Warp(&'a [bool]),
-// }
+// padding mode. It can be either a single BorderType applied on all sides or a custom tuple of two BorderTypes for (H, W), respectively.
+pub enum PaddingMode<const N: usize, T: num::traits::NumAssign + Copy> {
+    Zeros,
+    Const(T),
+    Reflect,
+    Replicate,
+    Warp,
+    Custom([BorderType<T>; N]),
+}
+
+// padding mode for single dim
+pub enum BorderType<T: num::traits::NumAssign + Copy> {
+    Zeros,
+    Const(T),
+    Reflect,
+    Replicate,
+    Warp,
+}
