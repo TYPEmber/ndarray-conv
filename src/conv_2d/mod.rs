@@ -162,20 +162,11 @@ where
             for j in (0..=pad_input_w - kernel_w).step_by(stride_w) {
                 let mut tmp_res = T::zero();
                 let cur = pad_input.uget((i, j));
-                for k in 0..offsets.len() {
-                    let (tmp_offset, tmp_kernel) = offsets[k];
 
-                    tmp_res += *(cur as *const T).add(tmp_offset) * tmp_kernel;
-                }
+                offsets.iter().for_each(|(tmp_offset, tmp_kernel)| {
+                    tmp_res += *(cur as *const T).add(*tmp_offset) * *tmp_kernel
+                });
 
-                // for (tmp_offset, tmp_kernel) in offsets.iter() {
-                //     tmp_res += *(cur as *const f32).add(*tmp_offset) * tmp_kernel;
-                // }
-
-                // let cur_input = pad_input.slice(s!(i..i + kernel_h, j..j + kernel_w));
-
-                // *ret1.uget_mut((0, ret_idx)) = (cur_input.to_owned() * kernel).sum();
-                // ret1[(0, ret_idx)] = (cur_input.to_owned() * kernel).sum();
                 *ret1.uget_mut((0, ret_idx)) = tmp_res;
                 ret_idx += 1;
             }
