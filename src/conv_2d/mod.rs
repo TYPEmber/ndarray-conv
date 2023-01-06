@@ -224,7 +224,14 @@ where
         input_h,
         input_w,
         padding_size,
-        pair_padding_mode,
+        &pair_padding_mode,
+    );
+    pad_inner_col(
+        &mut pad_input,
+        input_h,
+        input_w,
+        padding_size,
+        &pair_padding_mode,
     );
     // Array2::zeros((1, 1))
     pad_input
@@ -235,7 +242,7 @@ fn pad_inner_row<T>(
     input_h: usize,
     input_w: usize,
     padding_size: &[[usize; 2]; 2],
-    border_type: PaddingMode<2, T>,
+    border_type: &PaddingMode<2, T>,
 ) where
     T: Copy + NumAssign + std::fmt::Debug,
 {
@@ -247,16 +254,30 @@ fn pad_inner_row<T>(
                 // left padding
                 pad_input
                     .slice_mut(s!(padding_h[0]..input_h + padding_h[0], 0..padding_w[0]))
-                    .assign(&Array2::from_elem((input_h, padding_w[0]), num));
+                    .assign(&Array2::from_elem((input_h, padding_w[0]), *num));
                 // right padding
                 pad_input
                     .slice_mut(s!(
                         padding_h[0]..input_h + padding_h[0],
                         input_w + padding_w[0]..
                     ))
-                    .assign(&Array2::from_elem((input_h, padding_w[1]), num));
+                    .assign(&Array2::from_elem((input_h, padding_w[1]), *num));
             }
-            BorderType::Reflect => {}
+            BorderType::Reflect => {
+                // left padding
+                for i in padding_h[0]..padding_h[0] + input_h {
+                    for j in 1..=padding_w[0] {
+                        pad_input[[i, padding_w[0] - j]] = pad_input[[i, padding_w[0] + j]];
+                    }
+                }
+                // right padding
+                for i in padding_h[0]..padding_h[0] + input_h {
+                    for j in 1..=padding_w[1] {
+                        pad_input[[i, padding_w[0] + input_w - 1 + j]] =
+                            pad_input[[i, padding_w[0] + input_w - 1 - j]]
+                    }
+                }
+            }
             BorderType::Replicate => {
                 // left padding
                 for mut row in pad_input
@@ -274,7 +295,7 @@ fn pad_inner_row<T>(
                 for mut row in pad_input
                     .slice_mut(s!(
                         padding_h[0]..input_h + padding_h[0],
-                        input_w + padding_w[0] - 1 ..
+                        input_w + padding_w[0] - 1..
                     ))
                     .rows_mut()
                 {
@@ -283,7 +304,126 @@ fn pad_inner_row<T>(
                         .assign(&Array1::from_elem(padding_w[0], first_elem));
                 }
             }
-            BorderType::Warp => {}
+            BorderType::Warp => unsafe {
+                // left padding
+                let left_pad = pad_input.slice(s!(
+                    padding_h[0]..input_h + padding_h[0],
+                    input_w..padding_w[0] + input_w
+                ));
+
+                (&pad_input.slice(s!(padding_h[0]..input_h + padding_h[0], 0..padding_w[0]))
+                    as *const ArrayView2<T> as *mut ArrayViewMut2<T>)
+                    .as_mut()
+                    .unwrap()
+                    .assign(&left_pad);
+
+                // right padding
+                let right_pad = pad_input.slice(s!(
+                    padding_h[0]..input_h + padding_h[0],
+                    padding_w[0]..padding_w[0] + padding_w[1]
+                ));
+
+                (&pad_input.slice(s!(
+                    padding_h[0]..input_h + padding_h[0],
+                    input_w + padding_w[0]..
+                )) as *const ArrayView2<T> as *mut ArrayViewMut2<T>)
+                    .as_mut()
+                    .unwrap()
+                    .assign(&right_pad);
+            },
+            _ => {}
+        }
+    }
+}
+
+fn pad_inner_col<T>(
+    pad_input: &mut Array2<T>,
+    input_h: usize,
+    input_w: usize,
+    padding_size: &[[usize; 2]; 2],
+    border_type: &PaddingMode<2, T>,
+) where
+    T: Copy + NumAssign + std::fmt::Debug,
+{
+    let [padding_h, padding_w] = *padding_size;
+
+    if let PaddingMode::Custom([_, col_border_type]) = border_type {
+        match col_border_type {
+            BorderType::Const(num) => {
+                // top padding
+                pad_input
+                    .slice_mut(s!(..padding_h[0], ..))
+                    .assign(&Array2::from_elem(
+                        (padding_h[0], input_w + padding_w[0] + padding_w[1]),
+                        *num,
+                    ));
+                // bottom padding
+                pad_input
+                    .slice_mut(s!(padding_h[0] + input_h.., ..))
+                    .assign(&Array2::from_elem(
+                        (padding_h[1], input_w + padding_w[0] + padding_w[1]),
+                        *num,
+                    ));
+            }
+            BorderType::Reflect => unsafe {
+                // top padding
+                for i in 1..=padding_h[0] {
+                    let row_pad = pad_input.row(padding_h[0] + i);
+
+                    (&pad_input.row(padding_h[0] - i) as *const ArrayView1<T>
+                        as *mut ArrayViewMut1<T>)
+                        .as_mut()
+                        .unwrap()
+                        .assign(&row_pad);
+                }
+                // bottom padding
+                for i in 1..=padding_h[1] {
+                    let row_pad = pad_input.row(padding_h[0] + input_h - 1 - i);
+
+                    (&pad_input.row(padding_h[0] + input_h - 1 + i) as *const ArrayView1<T>
+                        as *mut ArrayViewMut1<T>)
+                        .as_mut()
+                        .unwrap()
+                        .assign(&row_pad);
+                }
+            },
+            BorderType::Replicate => unsafe {
+                let first_row = pad_input.row(padding_h[0]);
+                let last_row = pad_input.row(input_h + padding_h[0] - 1);
+                // top padding
+                for i in 0..padding_h[0] {
+                    (&pad_input.row(i) as *const ArrayView1<T> as *mut ArrayViewMut1<T>)
+                        .as_mut()
+                        .unwrap()
+                        .assign(&first_row);
+                }
+                // bottom padding
+                for i in input_h + padding_h[0] - 1..input_h + padding_h[0] + padding_h[1] {
+                    (&pad_input.row(i) as *const ArrayView1<T> as *mut ArrayViewMut1<T>)
+                        .as_mut()
+                        .unwrap()
+                        .assign(&last_row);
+                }
+            },
+            BorderType::Warp => unsafe {
+                // top padding
+                let top_pad = pad_input.slice(s!(input_h..input_h + padding_h[0], ..));
+
+                (&pad_input.slice(s!(..padding_h[0], ..)) as *const ArrayView2<T>
+                    as *mut ArrayViewMut2<T>)
+                    .as_mut()
+                    .unwrap()
+                    .assign(&top_pad);
+
+                // bottom padding
+                let bottom_pad = pad_input.slice(s!(padding_h[0]..padding_h[0] + padding_h[1], ..));
+
+                (&pad_input.slice(s!(padding_h[0] + input_h.., ..)) as *const ArrayView2<T>
+                    as *mut ArrayViewMut2<T>)
+                    .as_mut()
+                    .unwrap()
+                    .assign(&bottom_pad);
+            },
             _ => {}
         }
     }
@@ -308,7 +448,9 @@ where
             PaddingMode::Custom([BorderType::Const(num), BorderType::Const(num)])
         }
         PaddingMode::Reflect => PaddingMode::Custom([BorderType::Reflect, BorderType::Reflect]),
-        PaddingMode::Replicate => PaddingMode::Custom([BorderType::Replicate, BorderType::Reflect]),
+        PaddingMode::Replicate => {
+            PaddingMode::Custom([BorderType::Replicate, BorderType::Replicate])
+        }
         PaddingMode::Warp => PaddingMode::Custom([BorderType::Warp, BorderType::Warp]),
         PaddingMode::Custom([row_border_type, col_border_type]) => {
             PaddingMode::Custom([row_border_type, col_border_type])
@@ -402,17 +544,24 @@ mod tests {
 
     #[test]
     fn custom_conv_with_pad_test() {
+        // let input_pixels = array![
+        //     [1, 1, 1, 0, 0],
+        //     [0, 1, 1, 1, 0],
+        //     [0, 0, 1, 1, 1],
+        //     [0, 0, 1, 1, 0],
+        //     [0, 1, 1, 0, 0],
+        // ];
         let input_pixels = array![
-            [1, 1, 1, 0, 0],
-            [0, 1, 1, 1, 0],
-            [0, 0, 1, 1, 1],
-            [0, 0, 1, 1, 0],
-            [0, 1, 1, 0, 0],
+            [1, 2, 3, 4, 5],
+            [6, 7, 8, 9, 10],
+            [11, 12, 13, 14, 15],
+            [16, 17, 18, 19, 20],
+            [21, 22, 23, 24, 25],
         ];
 
         let kernel = array![[1, 0, 1], [0, 1, 0], [1, 0, 1], [2, -1, 3]];
 
-        let padding = [2, 0];
+        let padding = [2, 1];
         let stride = [1, 1];
         let custom_conv_with_pad_output_pixels = array![
             [4, 5, 2],
@@ -427,7 +576,7 @@ mod tests {
                 .conv_2d(
                     &kernel,
                     ConvType::Custom(padding, stride),
-                    PaddingMode::Zeros
+                    PaddingMode::Warp
                 )
                 .unwrap(),
             custom_conv_with_pad_output_pixels
