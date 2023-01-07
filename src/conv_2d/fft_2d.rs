@@ -4,6 +4,7 @@ use std::fmt::{Debug, Display};
 use transpose::transpose;
 pub fn inverse<T>(
     arr: &mut Array2<rustfft::num_complex::Complex<T>>,
+    origin_len: usize,
     r_planner: &mut realfft::RealFftPlanner<T>,
     c_planner: &mut rustfft::FftPlanner<T>,
 ) -> Array2<T>
@@ -11,8 +12,7 @@ where
     T: rustfft::FftNum,
 {
     // return Array2::zeros((1,1));
-
-    let ifft_row = r_planner.plan_fft_inverse((arr.shape()[0] - 1) * 2);
+    let ifft_row = r_planner.plan_fft_inverse(origin_len);
     let ifft_col = c_planner.plan_fft_inverse(arr.shape()[1]);
 
     ifft_col.process(arr.as_slice_mut().unwrap());
@@ -21,7 +21,7 @@ where
     //     ifft_col.process(row.as_slice_mut().unwrap());
     // });
 
-    let mut output_t = Array2::zeros((arr.shape()[1], (arr.shape()[0] - 1) * 2));
+    let mut output_t = Array2::zeros((arr.shape()[1], origin_len));
 
     // for mut row in arr.rows_mut() {
     //     ifft_col.process(row.as_slice_mut().unwrap());

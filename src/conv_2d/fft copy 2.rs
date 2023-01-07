@@ -6,8 +6,10 @@ use rustfft::num_traits::FromPrimitive;
 
 use super::{c2cfft, fft_2d};
 
+use super::Padding;
+
 pub trait Conv2DFftExt<T: rustfft::FftNum + Float, S: Data> {
-    fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>>;
+    fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>, padding: Padding<2>) -> Option<Array2<T>>;
 }
 
 impl<S, T> Conv2DFftExt<T, S> for ArrayBase<S, Ix2>
@@ -15,16 +17,20 @@ where
     S: Data<Elem = T>,
     T: rustfft::FftNum + Float,
 {
-    fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>> {
+    fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>, padding: Padding<2>) -> Option<Array2<T>> {
         let (shape, mut ret) = conv_2d_fft_inner(self, kernel);
-        // Some(ret.slice_mut(s!(..shape.0, ..shape.1)).to_owned())
-        Some(
-            ret.slice_mut(s!(
+
+        let s = match padding {
+            Padding::Full => s!(..shape.0, ..shape.1),
+            Padding::Same => s!(
                 (kernel.shape()[0] - 1) / 2..(kernel.shape()[0] - 1) / 2 + self.shape()[0],
                 (kernel.shape()[1] - 1) / 2..(kernel.shape()[1] - 1) / 2 + self.shape()[1],
-            ))
-            .to_owned(),
-        )
+            ),
+            Padding::Valid => todo!(),
+            Padding::Custom(_, _) => todo!(),
+        };
+
+        Some(ret.slice_mut(s).to_owned())
     }
 }
 
@@ -40,24 +46,8 @@ where
         data.shape()[0] + kernel.shape()[0] - 1,
         data.shape()[1] + kernel.shape()[1] - 1,
     );
-    
-    let fft_shape = (good_size_cc(output_shape.0), good_size_rr(output_shape.1));
 
-    // let fft_shape = (good_size_c(output_shape.0), good_size_r(output_shape.1));
-    // let fft_shape_23 = (good_size_cc(output_shape.0), good_size_rr(output_shape.1));
-
-    // let fft_shape = (
-    //     if fft_shape_23.0 - fft_shape.0 < fft_shape.0 / 10 {
-    //         fft_shape_23.0
-    //     } else {
-    //         fft_shape.0
-    //     },
-    //     if fft_shape_23.1 - fft_shape.1 < fft_shape.1 / 10 {
-    //         fft_shape_23.1
-    //     } else {
-    //         fft_shape.1
-    //     },
-    // );
+    let fft_shape = (good_size_c(output_shape.0), good_size_r(output_shape.1));
 
     let mut data_ext = Array2::zeros(fft_shape);
     data_ext
@@ -84,7 +74,7 @@ where
 
     (
         output_shape,
-        fft_2d::inverse(&mut mul_spec, fft_shape.1, &mut rp, &mut cp),
+        fft_2d::inverse(&mut mul_spec, &mut rp, &mut cp),
     )
 }
 
@@ -101,16 +91,6 @@ pub fn good_size_cc(n: usize) -> usize {
             }
         }
     }
-    loop {
-        let new_fac = best_fac / 6 * 5;
-        match new_fac.cmp(&n) {
-            std::cmp::Ordering::Less => break,
-            std::cmp::Ordering::Equal => return n,
-            std::cmp::Ordering::Greater => {
-                best_fac = new_fac;
-            }
-        }
-    }
 
     best_fac
 }
@@ -119,12 +99,14 @@ pub fn good_size_rr(n: usize) -> usize {
     let res = n % 2;
     let n = n / 2;
 
-    (good_size_cc(n)) * 2 + res
+    (good_size_cc(n) + res) * 2
 }
 
 pub fn good_size_c(n: usize) -> usize {
     if n <= 12 {
         return n;
+    } else if n < 3000 {
+        return good_size_cc(n);
     }
 
     let mut best_fac = 2 * n;
@@ -167,6 +149,8 @@ pub fn good_size_c(n: usize) -> usize {
 pub fn good_size_r(n: usize) -> usize {
     if n <= 6 {
         return n;
+    } else if n < 3000 {
+        return good_size_rr(n);
     }
 
     let mut best_fac = 2 * n;
@@ -290,7 +274,7 @@ mod tests {
 
         dbg!(input_pixels
             .mapv(|x| x as f64)
-            .conv_2d_fft(&kernel.mapv(|x| x as f64))
+            .conv_2d_fft(&kernel.mapv(|x| x as f64), Padding::Same)
             .unwrap()
             .mapv(|x| x.round() as i32));
         // dbg!(&conv_2d_c2c::<
@@ -303,7 +287,7 @@ mod tests {
     #[test]
     fn test_best_fft_len() {
         // let mut n = 93059;
-        let mut n = 5000;
+        let mut n = 5020;
         dbg!(good_size_c(n));
         dbg!(good_size_cc(n));
         dbg!(good_size_r(n));
