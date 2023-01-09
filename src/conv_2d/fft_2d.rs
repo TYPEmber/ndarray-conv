@@ -29,7 +29,7 @@ where
 
     {
         let mut input_t = Array2::zeros((arr.shape()[1], arr.shape()[0]));
-        
+
         transpose(
             arr.as_slice().unwrap(),
             input_t.as_slice_mut().unwrap(),
@@ -137,74 +137,4 @@ where
     // }
 
     output_t
-}
-
-pub fn inverse_f64<T>(
-    arr: &mut Array2<rustfft::num_complex::Complex64>,
-    r_planner: &mut realfft::RealFftPlanner<f64>,
-    c_planner: &mut rustfft::FftPlanner<f64>,
-) -> Array2<T>
-where
-    T: Copy + Clone + NumAssign + Send + Sync + FromPrimitive,
-    f64: std::convert::From<T>,
-{
-    let ifft_row = r_planner.plan_fft_inverse((arr.shape()[0] - 1) * 2);
-    let ifft_col = c_planner.plan_fft_inverse(arr.shape()[1]);
-
-    ifft_col.process(arr.as_slice_mut().unwrap());
-
-    let mut input_t = Array2::zeros((arr.shape()[1], arr.shape()[0]));
-    let mut output_t = Array2::zeros((arr.shape()[1], (arr.shape()[0] - 1) * 2));
-
-    transpose(
-        arr.as_slice().unwrap(),
-        input_t.as_slice_mut().unwrap(),
-        arr.shape()[1],
-        arr.shape()[0],
-    );
-
-    ndarray::Zip::from(input_t.rows_mut())
-        .and(output_t.rows_mut())
-        .for_each(|mut row, mut output| {
-            row.first_mut().unwrap().im = 0.0;
-            // row.last_mut().unwrap().im = 0.0;
-            ifft_row
-                .process(row.as_slice_mut().unwrap(), output.as_slice_mut().unwrap())
-                .unwrap();
-        });
-
-    // output_t.mapv(|x| T::from_f64((x / output_t.len() as f64).round()).unwrap())
-    output_t.mapv(|x| T::from_f64(x / output_t.len() as f64 + 0.5).unwrap())
-}
-
-pub fn forward_f64<T, S: ndarray::Data<Elem = T>>(
-    arr: &ArrayBase<S, Ix2>,
-    r_planner: &mut realfft::RealFftPlanner<f64>,
-    c_planner: &mut rustfft::FftPlanner<f64>,
-) -> Array2<rustfft::num_complex::Complex64>
-where
-    T: Copy + Clone + NumAssign + Debug + Display + Send + Sync,
-    f64: std::convert::From<T>,
-{
-    let (nx, ny) = arr.dim();
-    let mut input = arr.mapv(|x| x.into());
-    let mut output = Array2::zeros((nx, ny / 2 + 1));
-    let fft_row = r_planner.plan_fft_forward(ny);
-    let fft_col = c_planner.plan_fft_forward(nx);
-
-    ndarray::Zip::from(input.rows_mut())
-        .and(output.rows_mut())
-        .for_each(|mut row, mut output| {
-            fft_row
-                .process(row.as_slice_mut().unwrap(), output.as_slice_mut().unwrap())
-                .unwrap();
-        });
-
-    let output = output.into_raw_vec();
-    let mut output_t = vec![rustfft::num_complex::Complex::default(); output.len()];
-    transpose::transpose(&output, &mut output_t, ny / 2 + 1, nx);
-
-    fft_col.process(&mut output_t);
-
-    Array2::from_shape_vec((ny / 2 + 1, nx), output_t).unwrap()
 }

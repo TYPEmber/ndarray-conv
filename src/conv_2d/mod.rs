@@ -3,11 +3,8 @@ use std::ops::Mul;
 use ndarray::{prelude::*, OwnedRepr};
 use num::traits::{AsPrimitive, FromPrimitive, NumAssign};
 
-pub mod c2cfft;
 pub mod fft;
 mod fft_2d;
-pub mod naive_conv;
-pub mod ndrustfft;
 
 use crate::{BorderType, PaddingMode};
 
@@ -205,7 +202,6 @@ where
     Some(ret1.into_shape((out_h, out_w)).unwrap())
 }
 
-
 fn pad<S, T>(
     data: &ArrayBase<S, Ix2>,
     padding: &[[usize; 2]; 2],
@@ -219,7 +215,13 @@ where
 {
     let (pad_input_h, pad_input_w) = (pad_input_size[0], pad_input_size[1]);
     let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
-    pad_inner(data, padding, &[pad_input_h, pad_input_w], pad_input, padding_mode)
+    pad_inner(
+        data,
+        padding,
+        &[pad_input_h, pad_input_w],
+        pad_input,
+        padding_mode,
+    )
 }
 
 fn pad_inner<S, T>(

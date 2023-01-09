@@ -4,7 +4,7 @@ use ndarray::{prelude::*, Data, DataOwned};
 use num::{traits::AsPrimitive, traits::NumAssign, Float, ToPrimitive};
 use rustfft::num_traits::FromPrimitive;
 
-use super::{c2cfft, fft_2d};
+use super::fft_2d;
 
 pub trait Conv2DFftExt<T: rustfft::FftNum + Float, S: Data> {
     fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>>;
@@ -40,7 +40,7 @@ where
         data.shape()[0] + kernel.shape()[0] - 1,
         data.shape()[1] + kernel.shape()[1] - 1,
     );
-    
+
     let fft_shape = (good_size_cc(output_shape.0), good_size_rr(output_shape.1));
 
     // let fft_shape = (good_size_c(output_shape.0), good_size_r(output_shape.1));
@@ -196,57 +196,6 @@ pub fn good_size_r(n: usize) -> usize {
     }
 
     best_fac
-}
-
-pub fn conv_2d_c2c<T, S: ndarray::Data<Elem = T>, SM: ndarray::Data<Elem = T>>(
-    data: &ArrayBase<S, Ix2>,
-    kernel: &ArrayBase<S, Ix2>,
-) -> Option<Array2<T>>
-where
-    T: Copy
-        + Clone
-        + NumAssign
-        + std::fmt::Debug
-        + Display
-        + Send
-        + Sync
-        + FromPrimitive
-        + ToPrimitive
-        + AsPrimitive<f32>,
-
-    f64: std::convert::From<T>,
-{
-    let output_shape = (
-        data.shape()[0] + kernel.shape()[0] - 1,
-        data.shape()[1] + kernel.shape()[1] - 1,
-    );
-
-    let fft_shape = (good_size_c(output_shape.0), good_size_c(output_shape.1));
-
-    let mut data_ext = Array2::zeros(fft_shape);
-    data_ext
-        .slice_mut(s!(..data.shape()[0], ..data.shape()[1]))
-        .assign(data);
-
-    // let mut rp = realfft::RealFftPlanner::new();
-    // let mut cp = rustfft::FftPlanner::new();
-
-    let mut planner = rustfft::FftPlanner::new();
-
-    // let data_spec = fft_2d::forward(&data_ext, &mut rp, &mut cp);
-    let data_spec = c2cfft::forward(&data_ext, &mut planner);
-
-    let mut kernel_ext = Array2::zeros(fft_shape);
-    kernel_ext
-        .slice_mut(s![..kernel.shape()[0], ..kernel.shape()[1]])
-        .assign(kernel);
-    // let kernel_spec = fft_2d::forward(&kernel_ext, &mut rp, &mut cp);
-    let kernel_spec = c2cfft::forward(&kernel_ext, &mut planner);
-
-    let mut mul_spec = data_spec * kernel_spec;
-
-    // Some(fft_2d::inverse(&mut mul_spec, &mut rp, &mut cp))
-    Some(c2cfft::inverse(&mut mul_spec, &mut planner))
 }
 
 #[cfg(test)]
