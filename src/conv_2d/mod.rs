@@ -1,6 +1,6 @@
 use std::ops::Mul;
 
-use ndarray::prelude::*;
+use ndarray::{prelude::*, OwnedRepr};
 use num::traits::{AsPrimitive, FromPrimitive, NumAssign};
 
 pub mod c2cfft;
@@ -33,73 +33,102 @@ where
         conv_type: ConvType<2>,
         padding_mode: PaddingMode<2, T>,
     ) -> Option<Array2<T>> {
-        let (h, w) = (self.shape()[0], self.shape()[1]);
-        let (kernel_h, kernel_w) = (kernel.shape()[0], kernel.shape()[1]);
-
-        let (pad, stride) = match conv_type {
-            ConvType::Full => {
-                let (pad_h, pad_w) = ([kernel_h - 1; 2], [kernel_w - 1; 2]);
-                let (stride_h, stride_w) = (1, 1);
-                ([pad_h, pad_w], [stride_h, stride_w])
-            }
-            ConvType::Same => {
-                let (stride_h, stride_w) = (1, 1);
-                let pad_h = if (h * stride_h - h + kernel_h - 1) % 2 == 0 {
-                    [(h * stride_h - h + kernel_h - 1) / 2; 2]
-                } else {
-                    [
-                        (h * stride_h - h + kernel_h - 1) / 2 + 1,
-                        (h * stride_h - h + kernel_h - 1) / 2,
-                    ]
-                };
-                let pad_w = if (w * stride_w - w + kernel_w - 1) % 2 == 0 {
-                    [(w * stride_w - w + kernel_w - 1) / 2; 2]
-                } else {
-                    [
-                        (w * stride_w - w + kernel_w - 1) / 2 + 1,
-                        (w * stride_w - w + kernel_w - 1) / 2,
-                    ]
-                };
-                ([pad_h, pad_w], [stride_h, stride_w])
-            }
-            ConvType::Valid => {
-                let (pad_h, pad_w) = ([0; 2], [0; 2]);
-                let (stride_h, stride_w) = (1, 1);
-                ([pad_h, pad_w], [stride_h, stride_w])
-            }
-            ConvType::Custom(pad, stride) => ([[pad[0]; 2], [pad[1]; 2]], stride),
-        };
-
-        conv_2d_inner(self, kernel, &pad, &stride, padding_mode)
+        // let (h, w) = (self.shape()[0], self.shape()[1]);
+        let input_size = [self.shape()[0], self.shape()[1]];
+        let kernel_size = [kernel.shape()[0], kernel.shape()[1]];
+        let (pad_input_size, padding, stride) = get_size(&input_size, &kernel_size, conv_type);
+        dbg!(&pad_input_size, &padding, &stride, &input_size);
+        conv_2d_inner(
+            self,
+            kernel,
+            &input_size,
+            &kernel_size,
+            &padding,
+            &stride,
+            &pad_input_size,
+            padding_mode,
+        )
     }
+}
+
+fn get_size(
+    input_size: &[usize; 2],
+    kernel_size: &[usize; 2],
+    conv_type: ConvType<2>,
+) -> ([usize; 2], [[usize; 2]; 2], [usize; 2]) {
+    let (h, w) = (input_size[0], input_size[1]);
+    let (kernel_h, kernel_w) = (kernel_size[0], kernel_size[1]);
+
+    let (pad, stride) = match conv_type {
+        ConvType::Full => {
+            let (pad_h, pad_w) = ([kernel_h - 1; 2], [kernel_w - 1; 2]);
+            let (stride_h, stride_w) = (1, 1);
+            ([pad_h, pad_w], [stride_h, stride_w])
+        }
+        ConvType::Same => {
+            let (stride_h, stride_w) = (1, 1);
+            let pad_h = if (h * stride_h - h + kernel_h - 1) % 2 == 0 {
+                [(h * stride_h - h + kernel_h - 1) / 2; 2]
+            } else {
+                [
+                    (h * stride_h - h + kernel_h - 1) / 2 + 1,
+                    (h * stride_h - h + kernel_h - 1) / 2,
+                ]
+            };
+            let pad_w = if (w * stride_w - w + kernel_w - 1) % 2 == 0 {
+                [(w * stride_w - w + kernel_w - 1) / 2; 2]
+            } else {
+                [
+                    (w * stride_w - w + kernel_w - 1) / 2 + 1,
+                    (w * stride_w - w + kernel_w - 1) / 2,
+                ]
+            };
+            ([pad_h, pad_w], [stride_h, stride_w])
+        }
+        ConvType::Valid => {
+            let (pad_h, pad_w) = ([0; 2], [0; 2]);
+            let (stride_h, stride_w) = (1, 1);
+            ([pad_h, pad_w], [stride_h, stride_w])
+        }
+        ConvType::Custom(pad, stride) => ([[pad[0]; 2], [pad[1]; 2]], stride),
+    };
+
+    let pad_input_size = [
+        h + pad[0].iter().sum::<usize>(),
+        w + pad[1].iter().sum::<usize>(),
+    ];
+
+    (pad_input_size, pad, stride)
 }
 
 fn conv_2d_inner<S, T>(
     data: &ArrayBase<S, Ix2>,
     kernel: &ArrayBase<S, Ix2>,
+    input_size: &[usize; 2],
+    kernel_size: &[usize; 2],
     padding: &[[usize; 2]; 2],
     stride: &[usize; 2],
+    pad_input_size: &[usize; 2],
     padding_mode: PaddingMode<2, T>,
 ) -> Option<Array2<T>>
 where
     S: ndarray::Data<Elem = T>,
     T: Copy + NumAssign + std::fmt::Debug,
 {
-    let (input_h, input_w) = (data.shape()[0], data.shape()[1]);
-    let (kernel_h, kernel_w) = (kernel.shape()[0], kernel.shape()[1]);
+    let (input_h, input_w) = (input_size[0], input_size[1]);
+    let (kernel_h, kernel_w) = (kernel_size[0], kernel_size[1]);
     let [padding_h, padding_w] = *padding;
     let [stride_h, stride_w] = *stride;
-    let (pad_input_h, pad_input_w) = (
-        input_h + padding_h.iter().sum::<usize>(),
-        input_w + padding_w.iter().sum::<usize>(),
-    );
+    let (pad_input_h, pad_input_w) = (pad_input_size[0], pad_input_size[1]);
+
     let (out_h, out_w) = (
         (input_h - kernel_h + padding_h.iter().sum::<usize>()) / stride_h + 1,
         (input_w - kernel_w + padding_w.iter().sum::<usize>()) / stride_w + 1,
     );
 
     // padding
-    let mut pad_input = pad(data, &padding, &[pad_input_h, pad_input_w], padding_mode);
+    let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
+    let mut pad_input = pad(data, &padding, &[pad_input_h, pad_input_w], pad_input, padding_mode);
 
     dbg!(&pad_input);
     // let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
@@ -179,6 +208,7 @@ fn pad<S, T>(
     data: &ArrayBase<S, Ix2>,
     padding_size: &[[usize; 2]; 2],
     pad_input_size: &[usize; 2],
+    pad_input: ArrayBase<OwnedRepr<T>, Dim<>>,
     padding_mode: PaddingMode<2, T>,
 ) -> Array2<T>
 where
@@ -189,7 +219,8 @@ where
     let [padding_h, padding_w] = *padding_size;
     let (pad_input_h, pad_input_w) = (pad_input_size[0], pad_input_size[1]);
 
-    let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
+    // pad input
+    // let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
     let mut sub_pad_input = pad_input.slice_mut(s!(
         padding_h[0]..input_h + padding_h[0],
         padding_w[0]..input_w + padding_w[0]
@@ -505,7 +536,7 @@ mod tests {
         ];
         assert_eq!(
             input_pixels
-                .conv_2d(&kernel, ConvType::Same, PaddingMode::Replicate)
+                .conv_2d(&kernel, ConvType::Same, PaddingMode::Zeros)
                 .unwrap(),
             same_output_pixels
         );
