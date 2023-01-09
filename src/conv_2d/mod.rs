@@ -208,7 +208,7 @@ fn pad<S, T>(
     data: &ArrayBase<S, Ix2>,
     padding_size: &[[usize; 2]; 2],
     pad_input_size: &[usize; 2],
-    pad_input: ArrayBase<OwnedRepr<T>, Dim<>>,
+    mut pad_input: Array2<T>,
     padding_mode: PaddingMode<2, T>,
 ) -> Array2<T>
 where
