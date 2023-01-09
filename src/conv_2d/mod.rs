@@ -37,7 +37,7 @@ where
         let input_size = [self.shape()[0], self.shape()[1]];
         let kernel_size = [kernel.shape()[0], kernel.shape()[1]];
         let (pad_input_size, padding, stride) = get_size(&input_size, &kernel_size, conv_type);
-        dbg!(&pad_input_size, &padding, &stride, &input_size);
+        // dbg!(&pad_input_size, &padding, &stride, &input_size);
         conv_2d_inner(
             self,
             kernel,
@@ -127,8 +127,9 @@ where
     );
 
     // padding
-    let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
-    let mut pad_input = pad(data, &padding, &[pad_input_h, pad_input_w], pad_input, padding_mode);
+    let mut pad_input = pad(data, padding, padding, pad_input_size, padding_mode);
+    // let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
+    // let mut pad_input = pad(data, &padding, &[pad_input_h, pad_input_w], pad_input, padding_mode);
 
     dbg!(&pad_input);
     // let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
@@ -204,7 +205,24 @@ where
     Some(ret1.into_shape((out_h, out_w)).unwrap())
 }
 
+
 fn pad<S, T>(
+    data: &ArrayBase<S, Ix2>,
+    padding: &[[usize; 2]; 2],
+    padding_size: &[[usize; 2]; 2],
+    pad_input_size: &[usize; 2],
+    padding_mode: PaddingMode<2, T>,
+) -> Array2<T>
+where
+    S: ndarray::Data<Elem = T>,
+    T: Copy + NumAssign + std::fmt::Debug,
+{
+    let (pad_input_h, pad_input_w) = (pad_input_size[0], pad_input_size[1]);
+    let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
+    pad_inner(data, padding, &[pad_input_h, pad_input_w], pad_input, padding_mode)
+}
+
+fn pad_inner<S, T>(
     data: &ArrayBase<S, Ix2>,
     padding_size: &[[usize; 2]; 2],
     pad_input_size: &[usize; 2],
