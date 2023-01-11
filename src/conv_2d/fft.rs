@@ -4,18 +4,42 @@ use ndarray::{prelude::*, Data, DataOwned};
 use num::{traits::AsPrimitive, traits::NumAssign, Float, ToPrimitive};
 use rustfft::num_traits::FromPrimitive;
 
+use crate::{BorderType, ConvType, PaddingMode};
+
 use super::fft_2d;
 
-pub trait Conv2DFftExt<T: rustfft::FftNum + Float, S: Data> {
-    fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>>;
+pub trait Conv2DFftExt<T: rustfft::FftNum + Float + NumAssign, S: Data> {
+    fn conv_2d_fft(
+        &self,
+        kernel: &ArrayBase<S, Ix2>,
+        conv_type: ConvType<2>,
+        padding_mode: PaddingMode<2, T>,
+    ) -> Option<Array2<T>>;
 }
 
 impl<S, T> Conv2DFftExt<T, S> for ArrayBase<S, Ix2>
 where
     S: Data<Elem = T>,
-    T: rustfft::FftNum + Float,
+    T: rustfft::FftNum + Float + NumAssign,
 {
-    fn conv_2d_fft(&self, kernel: &ArrayBase<S, Ix2>) -> Option<Array2<T>> {
+    fn conv_2d_fft(
+        &self,
+        kernel: &ArrayBase<S, Ix2>,
+        conv_type: ConvType<2>,
+        padding_mode: PaddingMode<2, T>,
+    ) -> Option<Array2<T>> {
+        if let PaddingMode::Custom(mut borders) = padding_mode.unfold() {
+            borders.iter_mut().for_each(|border| {
+                *border = match border {
+                    crate::BorderType::Zeros => BorderType::Const(T::zero()),
+                    crate::BorderType::Const(_) => todo!(),
+                    crate::BorderType::Reflect => todo!(),
+                    crate::BorderType::Replicate => todo!(),
+                    crate::BorderType::Warp => todo!(),
+                };
+            });
+        }
+
         let (shape, mut ret) = conv_2d_fft_inner(self, kernel);
         // Some(ret.slice_mut(s!(..shape.0, ..shape.1)).to_owned())
         Some(
@@ -239,7 +263,11 @@ mod tests {
 
         dbg!(input_pixels
             .mapv(|x| x as f64)
-            .conv_2d_fft(&kernel.mapv(|x| x as f64))
+            .conv_2d_fft(
+                &kernel.mapv(|x| x as f64),
+                ConvType::Same,
+                PaddingMode::Zeros
+            )
             .unwrap()
             .mapv(|x| x.round() as i32));
         // dbg!(&conv_2d_c2c::<

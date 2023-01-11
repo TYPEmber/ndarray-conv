@@ -42,6 +42,7 @@ pub fn get_size(
             ([pad_h, pad_w], [stride_h, stride_w])
         }
         ConvType::Custom(pad, stride) => ([[pad[0]; 2], [pad[1]; 2]], stride),
+        ConvType::Explicit(pad, stride) => (pad, stride),
     };
 
     let pad_input_size = [
@@ -343,6 +344,18 @@ impl<T: NumAssign + Copy> PaddingMode<2, T> {
             }
             PaddingMode::Warp => PaddingMode::Custom([BorderType::Warp; 2]),
             PaddingMode::Custom(_) => self,
+        }
+    }
+}
+
+impl ConvType<2> {
+    pub fn unfold(self) -> Self {
+        match self {
+            ConvType::Full => todo!(),
+            ConvType::Same => todo!(),
+            ConvType::Valid => todo!(),
+            ConvType::Custom(_, _) => todo!(),
+            ConvType::Explicit(_, _) => self,
         }
     }
 }

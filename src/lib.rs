@@ -23,8 +23,10 @@ pub enum ConvType<const N: usize> {
     Full,
     Same,
     Valid,
+    // (pad, stride)
     Custom([usize; N], [usize; N]),
-    // Custom(&'a [usize], &'a [usize]),
+    // (pad, stride)
+    Explicit([[usize; 2]; N], [usize; N]),
 }
 
 // padding mode. It can be either a single BorderType applied on all sides or a custom tuple of two BorderTypes for (H, W), respectively.
