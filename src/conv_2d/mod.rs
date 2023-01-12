@@ -1,16 +1,11 @@
-use std::ops::Mul;
-
 use ndarray::{prelude::*, OwnedRepr};
 use num::traits::{AsPrimitive, FromPrimitive, NumAssign};
-
+use std::ops::Mul;
 pub mod fft;
 mod fft_2d;
-
 pub mod padding;
-
-use crate::{BorderType, PaddingMode};
-
 use super::ConvType;
+use crate::{BorderType, PaddingMode};
 
 pub trait Conv2DExt<T: NumAssign + Copy, S: ndarray::Data> {
     fn conv_2d(
@@ -32,11 +27,12 @@ where
         conv_type: ConvType<2>,
         padding_mode: PaddingMode<2, T>,
     ) -> Option<Array2<T>> {
-        // let (h, w) = (self.shape()[0], self.shape()[1]);
         let input_size = [self.shape()[0], self.shape()[1]];
         let kernel_size = [kernel.shape()[0], kernel.shape()[1]];
-        let (pad_input_size, padding, stride) =
-            padding::get_size(&input_size, &kernel_size, conv_type);
+        let explict_conv_type = conv_type.unfold(& kernel_size);
+
+        let (pad_input_size, out_size)=
+            padding::get_size(&input_size, &kernel_size, explict_conv_type);
         // dbg!(&pad_input_size, &padding, &stride, &input_size);
         conv_2d_inner(
             self,
@@ -70,11 +66,6 @@ where
     let [padding_h, padding_w] = *padding;
     let [stride_h, stride_w] = *stride;
     let (pad_input_h, pad_input_w) = (pad_input_size[0], pad_input_size[1]);
-
-    let (out_h, out_w) = (
-        (input_h - kernel_h + padding_h.iter().sum::<usize>()) / stride_h + 1,
-        (input_w - kernel_w + padding_w.iter().sum::<usize>()) / stride_w + 1,
-    );
 
     // padding
     let mut pad_input = padding::pad(data, padding, padding, pad_input_size, padding_mode);
