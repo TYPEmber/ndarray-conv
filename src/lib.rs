@@ -14,6 +14,7 @@ mod tests {
 }
 
 mod conv_2d;
+mod padding;
 
 pub use conv_2d::fft::Conv2DFftExt;
 pub use conv_2d::Conv2DExt;
@@ -38,6 +39,7 @@ pub enum PaddingMode<const N: usize, T: num::traits::NumAssign + Copy> {
     Replicate,
     Warp,
     Custom([BorderType<T>; N]),
+    Explicit([[BorderType<T>; 2]; N])
 }
 
 // padding mode for single dim
