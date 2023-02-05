@@ -78,7 +78,7 @@ pub trait Padding<const N: usize, T: num::traits::NumAssign + Copy> {
     ) -> Self;
 }
 
-impl<const N: usize, S, T> Padding<N, T> for ndarray::ArrayBase<S, ndarray::Dim<usize>>
+impl<const N: usize, S, T> Padding<N, T> for ndarray::ArrayBase<S, ndarray::Dim<[usize; N]>>
 where
     S: ndarray::Data<Elem = T>,
     T: num::traits::NumAssign + Copy,
