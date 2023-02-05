@@ -63,3 +63,54 @@ impl<const N: usize, T: num::traits::NumAssign + Copy> PaddingMode<N, T> {
         }
     }
 }
+
+pub trait Padding<const N: usize, T: num::traits::NumAssign + Copy> {
+    fn padding(
+        &self,
+        kernel_size: &[usize; N],
+        conv_type: &ConvType<N>,
+        padding_mode: &PaddingMode<N, T>,
+    ) -> Self;
+    fn padding_explicit(
+        &self,
+        conv_type: &ExplicitConv<N>,
+        padding_mode: &ExplictPadding<N, T>,
+    ) -> Self;
+}
+
+impl<const N: usize, S, T> Padding<N, T> for ndarray::ArrayBase<S, ndarray::Dim<usize>>
+where
+    S: ndarray::Data<Elem = T>,
+    T: num::traits::NumAssign + Copy,
+{
+    fn padding(
+        &self,
+        kernel_size: &[usize; N],
+        conv_type: &ConvType<N>,
+        padding_mode: &PaddingMode<N, T>,
+    ) -> Self {
+        self.padding_explicit(&conv_type.unfold(kernel_size), &padding_mode.unfold())
+    }
+
+    fn padding_explicit(
+        &self,
+        conv_type: &ExplicitConv<N>,
+        padding_mode: &ExplictPadding<N, T>,
+    ) -> Self {
+        todo!()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn conv_type_unfold() {
+
+    }
+
+    #[test]
+    fn padding_mode_unfold() {
+        
+    }
+}

@@ -29,9 +29,9 @@ where
     ) -> Option<Array2<T>> {
         let input_size = [self.shape()[0], self.shape()[1]];
         let kernel_size = [kernel.shape()[0], kernel.shape()[1]];
-        let explict_conv_type = conv_type.unfold(& kernel_size);
+        let explict_conv_type = conv_type.unfold(&kernel_size);
 
-        let (pad_input_size, out_size)=
+        let (pad_input_size, out_size) =
             padding::get_size(&input_size, &kernel_size, explict_conv_type);
         // dbg!(&pad_input_size, &padding, &stride, &input_size);
         conv_2d_inner(

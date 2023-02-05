@@ -1,64 +1,43 @@
-use crate::{BorderType, ConvType, PaddingMode};
+use crate::{BorderType, ConvType, ExplicitConv, ExplictPadding, PaddingMode};
 use ndarray::{prelude::*, StrideShape};
 use num::traits::NumAssign;
 
-impl ConvType<2> {
-    pub fn unfold(self, kernel_size: &[usize; 2]) -> Self {
-        match self {
-            ConvType::Full => {
-                let (stride_h, stride_w) = (1, 1);
-                let [pad_h, pad_w] = [kernel_size[0] - 1, kernel_size[1] - 1];
-                ConvType::Explicit([[pad_h; 2], [pad_w; 2]], [stride_h, stride_w])
-            }
-            ConvType::Same => {
-                let (stride_h, stride_w) = (1, 1);
-                let (kernel_h, kernel_w) = (kernel_size[0], kernel_size[1]);
-
-                let split = |k_size: usize| {
-                    if k_size % 2 == 0 {
-                        [(k_size - 1) / 2 + 1, (k_size - 1) / 2]
-                    } else {
-                        [(k_size - 1) / 2; 2]
-                    }
-                };
-
-                ConvType::Explicit([split(kernel_h), split(kernel_w)], [stride_h, stride_w])
-            }
-            ConvType::Valid => {
-                let (pad_hs, pad_ws) = ([0; 2], [0; 2]);
-                let (stride_h, stride_w) = (1, 1);
-                ConvType::Explicit([pad_hs, pad_ws], [stride_h, stride_w])
-            }
-            ConvType::Custom(pads, strides) => ConvType::Explicit([pads, pads], strides),
-            ConvType::Explicit(_, _) => self,
-        }
-    }
-}
+const N: usize = 2;
 
 // pub fn get_size
 pub fn get_size(
-    input_size: &[usize; 2],
-    kernel_size: &[usize; 2],
+    input_size: &[usize; N],
+    kernel_size: &[usize; N],
     conv_type: ConvType<2>,
 ) -> ([usize; 2], [usize; 2]) {
-    if let ConvType::Explicit(pads, strides) = conv_type.unfold(kernel_size) {
-        let (input_h, input_w) = (input_size[0], input_size[1]);
-        let (kernel_h, kernel_w) = (kernel_size[0], kernel_size[1]);
+    let ExplicitConv { pad, stride } = conv_type.unfold(kernel_size);
+    let (input_h, input_w) = (input_size[0], input_size[1]);
+    let (kernel_h, kernel_w) = (kernel_size[0], kernel_size[1]);
 
-        let pad_input_size = [
-            input_h + pads[0].iter().sum::<usize>(),
-            input_w + pads[1].iter().sum::<usize>(),
-        ];
+    // let pad_input_size = input_size
+    //     .iter()
+    //     .zip(pad.iter())
+    //     .map(|(input, pad)| input + pad.iter().sum::<usize>());
 
-        let out_size = [
-            (input_h - kernel_h + pads[0].iter().sum::<usize>()) / strides[0] + 1,
-            (input_w - kernel_w + pads[1].iter().sum::<usize>()) / strides[1] + 1,
-        ];
-        (pad_input_size, out_size)
+    let pad_input_size = [
+        input_h + pad[0].iter().sum::<usize>(),
+        input_w + pad[1].iter().sum::<usize>(),
+    ];
 
-    } else {
-        unreachable!()
-    }
+    // let out_size = input_size
+    //     .iter()
+    //     .zip(kernel_size.iter())
+    //     .zip(pad.iter())
+    //     .zip(stride.iter())
+    //     .map(|(((input, kernel), pad), stride)| {
+    //         input - kernel + pad.iter().sum::<usize>() / stride + 1
+    //     });
+
+    let out_size = [
+        (input_h - kernel_h + pad[0].iter().sum::<usize>()) / stride[0] + 1,
+        (input_w - kernel_w + pad[1].iter().sum::<usize>()) / stride[1] + 1,
+    ];
+    (pad_input_size, out_size)
 
     // let (pad, stride) = match conv_type {
     //     ConvType::Full => {
@@ -171,8 +150,8 @@ fn pad_inner_row<T>(
     pad_input: &mut Array2<T>,
     input_h: usize,
     input_w: usize,
-    padding_size: &[[usize; 2]; 2],
-    border_type: &PaddingMode<2, T>,
+    padding_size: &[[usize; 2]; N],
+    border_type: &ExplictPadding<N, T>,
 ) where
     T: Copy + NumAssign + std::fmt::Debug,
 {
@@ -366,23 +345,6 @@ fn pad_inner_col<T>(
     // }
     // match
     // Array2::zeros((1, 1))
-}
-
-impl<T: NumAssign + Copy> PaddingMode<2, T> {
-    pub fn unfold(self) -> Self {
-        match self {
-            PaddingMode::Zeros => PaddingMode::Custom([BorderType::Zeros, BorderType::Zeros]),
-            PaddingMode::Const(num) => {
-                PaddingMode::Custom([BorderType::Const(num), BorderType::Const(num)])
-            }
-            PaddingMode::Reflect => PaddingMode::Custom([BorderType::Reflect, BorderType::Reflect]),
-            PaddingMode::Replicate => {
-                PaddingMode::Custom([BorderType::Replicate, BorderType::Replicate])
-            }
-            PaddingMode::Warp => PaddingMode::Custom([BorderType::Warp; 2]),
-            PaddingMode::Custom(_) => self,
-        }
-    }
 }
 
 #[cfg(test)]
