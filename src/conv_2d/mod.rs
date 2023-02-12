@@ -1,11 +1,12 @@
-use ndarray::{prelude::*, OwnedRepr};
-use num::traits::{AsPrimitive, FromPrimitive, NumAssign};
-use std::ops::Mul;
+use ndarray::prelude::*;
+use num::traits::NumAssign;
+// use std::ops::Mul;
 pub mod fft;
 mod fft_2d;
 pub mod padding;
 use super::ConvType;
-use crate::{BorderType, PaddingMode};
+use crate::padding::{ExplicitConv, ExplictPadding};
+use crate::{PaddingMode, BorderType};
 
 pub trait Conv2DExt<T: NumAssign + Copy, S: ndarray::Data> {
     fn conv_2d(
@@ -29,20 +30,24 @@ where
     ) -> Option<Array2<T>> {
         let input_size = [self.shape()[0], self.shape()[1]];
         let kernel_size = [kernel.shape()[0], kernel.shape()[1]];
+
         let explict_conv_type = conv_type.unfold(&kernel_size);
+        let explict_padding_mode = padding_mode.unfold();
 
         let (pad_input_size, out_size) =
-            padding::get_size(&input_size, &kernel_size, explict_conv_type);
+            padding::get_size(&input_size, &kernel_size, &explict_conv_type);
         // dbg!(&pad_input_size, &padding, &stride, &input_size);
         conv_2d_inner(
             self,
             kernel,
             &input_size,
             &kernel_size,
-            &padding,
-            &stride,
+            // &padding,
             &pad_input_size,
-            padding_mode,
+            &explict_conv_type,
+            &explict_padding_mode,
+            // padding_mode,
+            &out_size
         )
     }
 }
@@ -52,10 +57,12 @@ fn conv_2d_inner<S, T>(
     kernel: &ArrayBase<S, Ix2>,
     input_size: &[usize; 2],
     kernel_size: &[usize; 2],
-    padding: &[[usize; 2]; 2],
-    stride: &[usize; 2],
+    // padding: &[[usize; 2]; 2],
+    // stride: &[usize; 2],
     pad_input_size: &[usize; 2],
-    padding_mode: PaddingMode<2, T>,
+    conv_type: &ExplicitConv<2>,
+    padding_mode: &ExplictPadding<2, T>,
+    out_size: &[usize; 2]
 ) -> Option<Array2<T>>
 where
     S: ndarray::Data<Elem = T>,
@@ -63,16 +70,18 @@ where
 {
     let (input_h, input_w) = (input_size[0], input_size[1]);
     let (kernel_h, kernel_w) = (kernel_size[0], kernel_size[1]);
-    let [padding_h, padding_w] = *padding;
-    let [stride_h, stride_w] = *stride;
+    // let [pad_hs, pad_ws] = conv_type.pad;
+
+    // let [padding_h, padding_w] = *padding;
+    let [stride_h, stride_w] = conv_type.stride;
     let (pad_input_h, pad_input_w) = (pad_input_size[0], pad_input_size[1]);
 
     // padding
-    let mut pad_input = padding::pad(data, padding, padding, pad_input_size, padding_mode);
+    let mut pad_input = padding::pad(data, &conv_type.pad, pad_input_size, padding_mode);
     // let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
     // let mut pad_input = pad(data, &padding, &[pad_input_h, pad_input_w], pad_input, padding_mode);
 
-    dbg!(&pad_input);
+    // dbg!(&pad_input);
     // let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
     // let mut sub_pad_input = pad_input.slice_mut(s!(
     //     padding_h[0]..input_h + padding_h[0],
@@ -113,7 +122,7 @@ where
     //         });
     // }
     // Some(ret)
-
+    let [out_h, out_w] = [out_size[0], out_size[1]];
     let mut ret1 = Array2::zeros((1, out_h * out_w));
 
     let mut offsets = vec![];
@@ -200,6 +209,12 @@ mod tests {
             [1, 2, 3, 4, 1],
             [0, 2, 2, 1, 1],
         ];
+        // assert_eq!(
+        //     input_pixels
+        //         .conv_2d(&kernel, ConvType::Same, PaddingMode::Custom([BorderType::Zeros, BorderType::Const(4)]))
+        //         .unwrap(),
+        //     same_output_pixels
+        // );
         assert_eq!(
             input_pixels
                 .conv_2d(&kernel, ConvType::Same, PaddingMode::Zeros)
@@ -232,24 +247,17 @@ mod tests {
 
     #[test]
     fn custom_conv_with_pad_test() {
-        // let input_pixels = array![
-        //     [1, 1, 1, 0, 0],
-        //     [0, 1, 1, 1, 0],
-        //     [0, 0, 1, 1, 1],
-        //     [0, 0, 1, 1, 0],
-        //     [0, 1, 1, 0, 0],
-        // ];
         let input_pixels = array![
-            [1, 2, 3, 4, 5],
-            [6, 7, 8, 9, 10],
-            [11, 12, 13, 14, 15],
-            [16, 17, 18, 19, 20],
-            [21, 22, 23, 24, 25],
+            [1, 1, 1, 0, 0],
+            [0, 1, 1, 1, 0],
+            [0, 0, 1, 1, 1],
+            [0, 0, 1, 1, 0],
+            [0, 1, 1, 0, 0],
         ];
 
         let kernel = array![[1, 0, 1], [0, 1, 0], [1, 0, 1], [2, -1, 3]];
 
-        let padding = [2, 1];
+        let padding = [2, 0];
         let stride = [1, 1];
         let custom_conv_with_pad_output_pixels = array![
             [4, 5, 2],
@@ -264,7 +272,7 @@ mod tests {
                 .conv_2d(
                     &kernel,
                     ConvType::Custom(padding, stride),
-                    PaddingMode::Warp
+                    PaddingMode::Zeros
                 )
                 .unwrap(),
             custom_conv_with_pad_output_pixels

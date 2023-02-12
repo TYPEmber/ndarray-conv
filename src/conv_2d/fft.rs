@@ -28,17 +28,18 @@ where
         conv_type: ConvType<2>,
         padding_mode: PaddingMode<2, T>,
     ) -> Option<Array2<T>> {
-        if let PaddingMode::Custom(mut borders) = padding_mode.unfold() {
-            borders.iter_mut().for_each(|border| {
-                *border = match border {
-                    crate::BorderType::Zeros => BorderType::Const(T::zero()),
-                    crate::BorderType::Const(_) => todo!(),
-                    crate::BorderType::Reflect => todo!(),
-                    crate::BorderType::Replicate => todo!(),
-                    crate::BorderType::Warp => todo!(),
-                };
-            });
-        }
+        todo!();
+        // if let PaddingMode::Custom(mut borders) = padding_mode.unfold() {
+        //     borders.iter_mut().for_each(|border| {
+        //         *border = match border {
+        //             crate::BorderType::Zeros => BorderType::Const(T::zero()),
+        //             crate::BorderType::Const(_) => todo!(),
+        //             crate::BorderType::Reflect => todo!(),
+        //             crate::BorderType::Replicate => todo!(),
+        //             crate::BorderType::Warp => todo!(),
+        //         };
+        //     });
+        // }
 
         let (shape, mut ret) = conv_2d_fft_inner(self, kernel);
         // Some(ret.slice_mut(s!(..shape.0, ..shape.1)).to_owned())

@@ -39,7 +39,7 @@ pub enum PaddingMode<const N: usize, T: num::traits::NumAssign + Copy> {
     Replicate,
     Warp,
     Custom([BorderType<T>; N]),
-    Explicit([[BorderType<T>; 2]; N])
+    Explicit([[BorderType<T>; 2]; N]),
 }
 
 // padding mode for single dim
