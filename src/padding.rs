@@ -33,9 +33,6 @@ impl<const N: usize> ConvType<N> {
                 }
             }
             ConvType::Valid => {
-                let (pad_hs, pad_ws) = ([0; 2], [0; 2]);
-                let (stride_h, stride_w) = (1, 1);
-
                 ExplicitConv {
                     pad: std::array::from_fn(|_| [0; 2]),
                     stride: std::array::from_fn(|_| 1),
@@ -78,9 +75,10 @@ impl<const N: usize, T: num::traits::NumAssign + Copy> PaddingMode<N, T> {
 //     ) -> Self;
 // }
 
-// impl<const N: usize, S, T> Padding<N, T> for ndarray::ArrayBase<S, ndarray::Dim<[usize; N]>>
+// impl<const N: usize, S, T, D> Padding<N, T> for ndarray::ArrayBase<S, D>
 // where
 //     S: ndarray::Data<Elem = T>,
+//     D: ndarray::Dimension,
 //     T: num::traits::NumAssign + Copy,
 // {
 //     fn padding(
@@ -97,15 +95,68 @@ impl<const N: usize, T: num::traits::NumAssign + Copy> PaddingMode<N, T> {
 //         conv_type: &ExplicitConv<N>,
 //         padding_mode: &ExplictPadding<N, T>,
 //     ) -> Self {
+//         conv_type.pad.into_iter().zip(padding_mode.0.into_iter());
 //         todo!()
 //     }
 // }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn conv_type_unfold() {}
+// fn padding_recursion<const N: usize, S, SM, T, D>(
+//     src: ndarray::ArrayBase<S, D>,
+//     tar: ndarray::ArrayBase<SM, D>,
+// ) where
+//     S: ndarray::Data<Elem = T>,
+//     SM: ndarray::DataMut<Elem = T>,
+//     D: ndarray::Dimension + ndarray::RemoveAxis,
+//     T: num::traits::NumAssign + Copy,
+//     <D as ndarray::Dimension>::Smaller: ndarray::RemoveAxis,
+// {
+//     match N {
+//         1 => {}
+//         2.. => {
+//             src.axis_iter(Axis(0))
+//                 .zip(tar.axis_iter_mut(Axis(0)))
+//                 .for_each(|(src, tar)| padding_recursion(src, tar));
 
-    #[test]
-    fn padding_mode_unfold() {}
-}
+//             src;
+//         }
+//         _ => unreachable!(),
+//     }
+// }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     #[test]
+//     fn conv_type_unfold() {}
+
+//     #[test]
+//     fn padding_mode_unfold() {}
+
+//     #[test]
+//     fn axis_iter() {
+//         let mut a = ndarray::array![
+//             [[1, 2, 3], [5, 6, 7], [8, 9, 10]],
+//             [[11, 12, 13], [15, 16, 17], [18, 19, 110]]
+//         ];
+
+//         let N = a.raw_dim().ndim() - 1;
+
+//         a.axis_iter_mut(Axis(0)).map(|b| {});
+
+//         for i in 1..N {
+//             a.strides()[N - i];
+//         }
+
+//         for i in 0..N - 1 {
+//             a.axis_iter_mut(Axis(i)).map(|b| {});
+//         }
+
+//         dbg!(&a.axis_iter(Axis(0)).collect::<Vec<_>>());
+
+//         dbg!(&a);
+//         let b = a.rows().into_iter().collect::<Vec<_>>();
+//         dbg!(a.slice_axis(Axis(2), ndarray::Slice::from(..).step_by(2)));
+//         dbg!(a.slice(s![..;2, .., ..]));
+//         dbg!(b);
+//     }
+// }
