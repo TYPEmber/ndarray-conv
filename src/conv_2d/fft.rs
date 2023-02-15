@@ -279,6 +279,32 @@ mod tests {
     }
 
     #[test]
+    fn test_same_conv() {
+        let input_pixels = array![
+            [1, 1, 1, 0, 0],
+            [0, 1, 1, 1, 0],
+            [0, 0, 1, 1, 1],
+            [0, 0, 1, 1, 0],
+            [0, 1, 1, 0, 0],
+        ];
+
+        let kernel = array![[1, 0, 1], [0, 1, 0], [1, 0, 1]];
+
+        let output_pixels = array![
+            [2, 2, 3, 1, 1],
+            [1, 4, 3, 4, 1],
+            [1, 2, 4, 3, 3],
+            [1, 2, 3, 4, 1],
+            [0, 2, 2, 1, 1],
+        ];
+
+        let (_, ret) =
+            conv_2d_fft_inner(&dbg!(input_pixels.mapv(f64::from)), &kernel.mapv(f64::from));
+        dbg!(&ret);
+        dbg!(&ret.mapv(|x| x.round() as i32));
+    }
+
+    #[test]
     fn test_best_fft_len() {
         // let mut n = 93059;
         let mut n = 5000;
