@@ -55,10 +55,14 @@ where
 
         ndarray::Zip::from(input_t.rows_mut())
             .and(output_t.rows_mut())
-            .for_each(|mut row, mut output| {
-                unsafe { row.uget_mut(0).im = T::zero() };
-                unsafe { row.uget_mut(row.len() - 1).im = T::zero() };
-                // row.last_mut().unwrap().im = 0.0;
+            .for_each(|mut row, mut output| {                
+                if ifft_row.len().is_odd() {
+                    unsafe { row.uget_mut(0).im = T::zero() };
+                } else {
+                    unsafe { row.uget_mut(0).im = T::zero() };
+                    unsafe { row.uget_mut(row.len() - 1).im = T::zero() }
+                };
+
                 ifft_row
                     .process(row.as_slice_mut().unwrap(), output.as_slice_mut().unwrap())
                     .unwrap();
