@@ -9,7 +9,7 @@ fn main() {
     let test_cycles_small = 10;
     // small input images
     for _ in 0..test_cycles_small {
-        let x = Array::random((1300, 5000), Uniform::new(0f32, 1.));
+        let x = Array::random((1300, 5002), Uniform::new(0f32, 1.));
         let k = Array::random((1, 1), Uniform::new(0f32, 1.));
 
         let now = Instant::now();

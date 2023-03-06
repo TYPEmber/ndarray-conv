@@ -1,5 +1,5 @@
 use ndarray::prelude::*;
-use num::traits::*;
+use num::{traits::*, Integer};
 use std::fmt::{Debug, Display};
 use transpose::transpose;
 pub fn inverse<T>(

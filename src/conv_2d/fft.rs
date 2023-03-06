@@ -8,12 +8,14 @@ use crate::{BorderType, ConvType, PaddingMode};
 
 use super::fft_2d;
 
+const N: usize = 2;
+
 pub trait Conv2DFftExt<T: rustfft::FftNum + Float + NumAssign, S: Data> {
     fn conv_2d_fft(
         &self,
         kernel: &ArrayBase<S, Ix2>,
-        conv_type: ConvType<2>,
-        padding_mode: PaddingMode<2, T>,
+        conv_type: ConvType<N>,
+        padding_mode: PaddingMode<N, T>,
     ) -> Option<Array2<T>>;
 }
 
@@ -25,21 +27,17 @@ where
     fn conv_2d_fft(
         &self,
         kernel: &ArrayBase<S, Ix2>,
-        conv_type: ConvType<2>,
-        padding_mode: PaddingMode<2, T>,
+        conv_type: ConvType<N>,
+        padding_mode: PaddingMode<N, T>,
     ) -> Option<Array2<T>> {
-        todo!();
-        // if let PaddingMode::Custom(mut borders) = padding_mode.unfold() {
-        //     borders.iter_mut().for_each(|border| {
-        //         *border = match border {
-        //             crate::BorderType::Zeros => BorderType::Const(T::zero()),
-        //             crate::BorderType::Const(_) => todo!(),
-        //             crate::BorderType::Reflect => todo!(),
-        //             crate::BorderType::Replicate => todo!(),
-        //             crate::BorderType::Warp => todo!(),
-        //         };
-        //     });
-        // }
+        let conv_type = conv_type.unfold(&[kernel.shape()[0], kernel.shape()[1]]);
+        let padding_mode = padding_mode.unfold();
+
+        let input_size = [self.shape()[0], self.shape()[1]];
+        let kernel_size = [kernel.shape()[0], kernel.shape()[1]];
+        let (pad_input_size, out_size) =
+            super::padding::get_size(&input_size, &kernel_size, &conv_type);
+        // super::padding::pad(self, &conv_type.pad, pad_input_size, padding_mode)
 
         let (shape, mut ret) = conv_2d_fft_inner(self, kernel);
         // Some(ret.slice_mut(s!(..shape.0, ..shape.1)).to_owned())
@@ -66,7 +64,9 @@ where
         data.shape()[1] + kernel.shape()[1] - 1,
     );
 
-    let fft_shape = (good_size_cc(output_shape.0), good_size_rr(output_shape.1));
+    let fft_shape = output_shape;
+
+    // let fft_shape = (good_size_cc(output_shape.0), good_size_rr(output_shape.1));
 
     // let fft_shape = (good_size_c(output_shape.0), good_size_r(output_shape.1));
     // let fft_shape_23 = (good_size_cc(output_shape.0), good_size_rr(output_shape.1));
@@ -297,6 +297,22 @@ mod tests {
             [1, 2, 3, 4, 1],
             [0, 2, 2, 1, 1],
         ];
+
+        let conv_type = ConvType::Same.unfold(&[kernel.shape()[0], kernel.shape()[1]]);
+
+        let (pad_input_size, out_size) = crate::conv_2d::padding::get_size(
+            &[input_pixels.shape()[0], input_pixels.shape()[1]],
+            &[kernel.shape()[0], kernel.shape()[1]],
+            &conv_type,
+        );
+        let input_pixels = crate::conv_2d::padding::pad(
+            &input_pixels,
+            &conv_type.pad,
+            &pad_input_size,
+            &PaddingMode::Zeros.unfold(),
+        );
+
+        dbg!(&input_pixels);
 
         let (_, ret) =
             conv_2d_fft_inner(&dbg!(input_pixels.mapv(f64::from)), &kernel.mapv(f64::from));

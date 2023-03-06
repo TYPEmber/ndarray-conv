@@ -1,3 +1,5 @@
+use std::{marker::PhantomData, ops::Index, slice::SliceIndex};
+
 use crate::*;
 
 #[derive(Debug)]
@@ -32,12 +34,10 @@ impl<const N: usize> ConvType<N> {
                     stride: std::array::from_fn(|_| 1),
                 }
             }
-            ConvType::Valid => {
-                ExplicitConv {
-                    pad: std::array::from_fn(|_| [0; 2]),
-                    stride: std::array::from_fn(|_| 1),
-                }
-            }
+            ConvType::Valid => ExplicitConv {
+                pad: std::array::from_fn(|_| [0; 2]),
+                stride: std::array::from_fn(|_| 1),
+            },
             ConvType::Custom(pads, strides) => ExplicitConv {
                 pad: pads.map(|pad| [pad; 2]),
                 stride: strides,
@@ -61,44 +61,96 @@ impl<const N: usize, T: num::traits::NumAssign + Copy> PaddingMode<N, T> {
     }
 }
 
-// pub trait Padding<const N: usize, T: num::traits::NumAssign + Copy> {
-//     fn padding(
-//         &self,
-//         kernel_size: &[usize; N],
-//         conv_type: &ConvType<N>,
-//         padding_mode: &PaddingMode<N, T>,
-//     ) -> Self;
-//     fn padding_explicit(
-//         &self,
-//         conv_type: &ExplicitConv<N>,
-//         padding_mode: &ExplictPadding<N, T>,
-//     ) -> Self;
-// }
+pub trait Padding<const N: usize, T: num::traits::NumAssign + Copy> {
+    fn padding(
+        &self,
+        kernel_size: &[usize; N],
+        conv_type: &ConvType<N>,
+        padding_mode: &PaddingMode<N, T>,
+    ) -> Self;
+    fn padding_explicit(
+        &self,
+        conv_type: &ExplicitConv<N>,
+        padding_mode: &ExplictPadding<N, T>,
+    ) -> Self;
+}
 
-// impl<const N: usize, S, T, D> Padding<N, T> for ndarray::ArrayBase<S, D>
-// where
-//     S: ndarray::Data<Elem = T>,
-//     D: ndarray::Dimension,
-//     T: num::traits::NumAssign + Copy,
-// {
-//     fn padding(
-//         &self,
-//         kernel_size: &[usize; N],
-//         conv_type: &ConvType<N>,
-//         padding_mode: &PaddingMode<N, T>,
-//     ) -> Self {
-//         self.padding_explicit(&conv_type.unfold(kernel_size), &padding_mode.unfold())
-//     }
+impl<const N: usize, S, T, D> Padding<N, T> for ndarray::ArrayBase<S, D>
+where
+    S: ndarray::Data<Elem = T>,
+    D: ndarray::Dimension,
+    T: num::traits::NumAssign + Copy,
+{
+    fn padding(
+        &self,
+        kernel_size: &[usize; N],
+        conv_type: &ConvType<N>,
+        padding_mode: &PaddingMode<N, T>,
+    ) -> Self {
+        self.padding_explicit(&conv_type.unfold(kernel_size), &padding_mode.unfold())
+    }
 
-//     fn padding_explicit(
-//         &self,
-//         conv_type: &ExplicitConv<N>,
-//         padding_mode: &ExplictPadding<N, T>,
-//     ) -> Self {
-//         conv_type.pad.into_iter().zip(padding_mode.0.into_iter());
-//         todo!()
-//     }
-// }
+    fn padding_explicit(
+        &self,
+        conv_type: &ExplicitConv<N>,
+        padding_mode: &ExplictPadding<N, T>,
+    ) -> Self {
+        conv_type.pad.into_iter().zip(padding_mode.0.into_iter());
+        todo!()
+    }
+}
+
+#[derive(Default)]
+struct Test<const N: usize, B: Index<usize>, T: num::traits::NumAssign + Copy> {
+    strides: PhantomData<B>,
+    data: Vec<T>,
+}
+
+impl<const N: usize, B: Index<usize>, T: num::traits::NumAssign + Copy>
+    Test<N, B, T>
+{
+    pub fn new() {
+        let a = Self {
+            strides: PhantomData {},
+            data: vec![],
+        };
+
+        let strides = a.strides;
+    }
+}
+
+struct PaddingBuffer<const N: usize, T: num::traits::NumAssign + Copy> {
+    strides: [usize; N],
+    data: Vec<T>,
+}
+
+impl<const N: usize, T: num::traits::NumAssign + Copy> PaddingBuffer<N, T> {
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new<S>(
+        data: &ndarray::ArrayBase<S, ndarray::Dim<[usize; N]>>,
+        pad_size: &[[usize; 2]; N],
+        padding_mode: &PaddingMode<N, T>,
+    ) where
+        S: ndarray::Data<Elem = T>,
+        ndarray::Dim<[usize; N]>: ndarray::Dimension,
+    {
+        let padding_mode = padding_mode.unfold();
+
+        let mut padding_buf_shape = [0; N];
+        padding_buf_shape.copy_from_slice(data.shape());
+
+        padding_buf_shape
+            .iter_mut()
+            .zip(pad_size.iter())
+            .for_each(|(pbs, p)| {
+                *pbs += p[0] + p[1];
+            });
+        let mut pb = ndarray::Array::from_elem(padding_buf_shape.as_slice(), T::zero());
+
+        let mut pb = vec![T::zero(); padding_buf_shape.iter().product()];
+    }
+    pub fn iter() {}
+}
 
 // fn padding_recursion<const N: usize, S, SM, T, D>(
 //     src: ndarray::ArrayBase<S, D>,
@@ -122,6 +174,19 @@ impl<const N: usize, T: num::traits::NumAssign + Copy> PaddingMode<N, T> {
 //         _ => unreachable!(),
 //     }
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn conv_type_unfold() {
+        let a = Test::<2, [usize; 2], f32>::default();
+    }
+
+    #[test]
+    fn padding_mode_unfold() {}
+}
+
 
 // #[cfg(test)]
 // mod tests {
