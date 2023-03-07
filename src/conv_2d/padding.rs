@@ -1,5 +1,5 @@
-use crate::{BorderType, PaddingMode, Padding};
-use crate::{ExplictMode, ExplicitPadding};
+use crate::{BorderType, Padding, PaddingMode};
+use crate::{ExplicitPadding, ExplictMode};
 use ndarray::prelude::*;
 // use ndarray::{prelude::*, StrideShape};
 use num::traits::NumAssign;
@@ -84,7 +84,7 @@ where
     S: ndarray::Data<Elem = T>,
     T: Copy + NumAssign + std::fmt::Debug,
 {
-    let mut buf = match *padding_mode {
+    let buf = match *padding_mode {
         PaddingMode::Zeros => return pad_const(data, padding, T::zero()).into(),
         PaddingMode::Const(value) => return pad_const(data, padding, value).into(),
         _ => pad_const(data, padding, T::zero()),
@@ -92,8 +92,8 @@ where
     let padding_mode = padding_mode.unfold();
     let (input_h, input_w) = (data.shape()[0], data.shape()[1]);
 
-    pad_inner_row(&mut buf, input_h, input_w, &padding.pad, &padding_mode.0[0]);
-    pad_inner_col(&mut buf, input_h, input_w, &padding.pad, &padding_mode.0[1]);
+    let buf = pad_inner_row(buf, input_h, input_w, &padding.pad, &padding_mode.0[0])?;
+    let buf = pad_inner_col(buf, input_h, input_w, &padding.pad, &padding_mode.0[1])?;
 
     buf.into()
 }
@@ -111,7 +111,7 @@ where
         data.shape()[1] + padding.pad[1].iter().sum::<usize>(),
     ];
     let mut buf = Array2::from_elem(buf_shape, value);
-   
+
     buf.slice_mut(s!(
         padding.pad[0][0]..data.shape()[0] + padding.pad[0][0],
         padding.pad[1][0]..data.shape()[1] + padding.pad[1][0],
@@ -122,12 +122,13 @@ where
 }
 
 fn pad_inner_row<T>(
-    pad_input: &mut Array2<T>,
+    mut pad_input: Array2<T>,
     input_h: usize,
     input_w: usize,
     padding: &[[usize; 2]; N],
     row_border_type: &[BorderType<T>; 2],
-) where
+) -> Option<Array2<T>>
+where
     T: Copy + NumAssign + std::fmt::Debug,
 {
     let [padding_h, padding_w] = *padding;
@@ -148,14 +149,15 @@ fn pad_inner_row<T>(
                 .assign(&Array2::from_elem((input_h, padding_w[1]), num));
         }
         BorderType::Reflect => {
-            // left padding
+            if padding_w[0] > input_w - 1 || padding_w[1] > input_h - 1 {
+                return None;
+            }
             for i in padding_h[0]..padding_h[0] + input_h {
+                // left padding
                 for j in 1..=padding_w[0] {
                     pad_input[[i, padding_w[0] - j]] = pad_input[[i, padding_w[0] + j]];
                 }
-            }
-            // right padding
-            for i in padding_h[0]..padding_h[0] + input_h {
+                // right padding
                 for j in 1..=padding_w[1] {
                     pad_input[[i, padding_w[0] + input_w - 1 + j]] =
                         pad_input[[i, padding_w[0] + input_w - 1 - j]]
@@ -215,17 +217,20 @@ fn pad_inner_row<T>(
                 .unwrap()
                 .assign(&right_pad);
         },
-        _ => {} // }
+        _ => return None,
     }
+
+    pad_input.into()
 }
 
 fn pad_inner_col<T>(
-    pad_input: &mut Array2<T>,
+    mut pad_input: Array2<T>,
     input_h: usize,
     input_w: usize,
     padding: &[[usize; 2]; 2],
     col_border_type: &[BorderType<T>; 2],
-) where
+) -> Option<Array2<T>>
+where
     T: Copy + NumAssign + std::fmt::Debug,
 {
     let [padding_h, padding_w] = *padding;
@@ -249,6 +254,9 @@ fn pad_inner_col<T>(
                 ));
         }
         BorderType::Reflect => unsafe {
+            if padding_h[0] > input_h - 1 || padding_h[1] > input_h - 1 {
+                return None;
+            }
             // top padding
             for i in 1..=padding_h[0] {
                 let row_pad = pad_input.row(padding_h[0] + i);
@@ -306,8 +314,10 @@ fn pad_inner_col<T>(
                 .unwrap()
                 .assign(&bottom_pad);
         },
-        _ => {}
+        _ => return None
     }
+
+    pad_input.into()
 }
 
 #[cfg(test)]
@@ -327,16 +337,14 @@ mod test {
 
         dbg!(pad(
             &input_pixels,
-            &Padding::Custom([1, 2], [1, 1])
-                .unfold(&std::array::from_fn(|i| kernel.shape()[i])),
+            &Padding::Custom([1, 2], [1, 1]).unfold(&std::array::from_fn(|i| kernel.shape()[i])),
             &PaddingMode::Const(7),
         ));
 
         dbg!(pad(
             &input_pixels,
-            &Padding::Custom([1, 2], [1, 1])
-                .unfold(&std::array::from_fn(|i| kernel.shape()[i])),
-            &PaddingMode::Circular,
+            &Padding::Custom([4, 4], [1, 1]).unfold(&std::array::from_fn(|i| kernel.shape()[i])),
+            &PaddingMode::Reflect,
         ));
     }
 }
