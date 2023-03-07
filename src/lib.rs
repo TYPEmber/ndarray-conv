@@ -37,7 +37,7 @@ pub enum PaddingMode<const N: usize, T: num::traits::NumAssign + Copy> {
     Const(T),
     Reflect,
     Replicate,
-    Warp,
+    Circular,
     Custom([BorderType<T>; N]),
     Explicit([[BorderType<T>; 2]; N]),
 }
@@ -49,5 +49,5 @@ pub enum BorderType<T: num::traits::NumAssign + Copy> {
     Const(T),
     Reflect,
     Replicate,
-    Warp,
+    Circular,
 }

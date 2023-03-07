@@ -209,7 +209,7 @@ fn pad_inner_row<T>(
                     .assign(&Array1::from_elem(padding_w[0], first_elem));
             }
         }
-        BorderType::Warp => unsafe {
+        BorderType::Circular => unsafe {
             // left padding
             let left_pad = pad_input.slice(s!(
                 padding_h[0]..input_h + padding_h[0],
@@ -308,7 +308,7 @@ fn pad_inner_col<T>(
                     .assign(&last_row);
             }
         },
-        BorderType::Warp => unsafe {
+        BorderType::Circular => unsafe {
             // top padding
             let top_pad = pad_input.slice(s!(input_h..input_h + padding_h[0], ..));
 

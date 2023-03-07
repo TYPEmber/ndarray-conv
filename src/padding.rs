@@ -54,7 +54,7 @@ impl<const N: usize, T: num::traits::NumAssign + Copy> PaddingMode<N, T> {
             PaddingMode::Const(num) => ExplictPadding([[BorderType::Const(num); 2]; N]),
             PaddingMode::Reflect => ExplictPadding([[BorderType::Reflect; 2]; N]),
             PaddingMode::Replicate => ExplictPadding([[BorderType::Replicate; 2]; N]),
-            PaddingMode::Warp => ExplictPadding([[BorderType::Warp; 2]; N]),
+            PaddingMode::Circular => ExplictPadding([[BorderType::Circular; 2]; N]),
             PaddingMode::Custom(borders) => ExplictPadding(borders.map(|border| [border; 2])),
             PaddingMode::Explicit(borders) => ExplictPadding(borders),
         }
