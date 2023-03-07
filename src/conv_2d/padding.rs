@@ -1,4 +1,4 @@
-use crate::{BorderType, Padding, PaddingMode};
+use crate::{BorderType, PaddingSize, PaddingMode};
 use crate::{ExplicitPadding, ExplictMode};
 use ndarray::prelude::*;
 // use ndarray::{prelude::*, StrideShape};
@@ -337,13 +337,13 @@ mod test {
 
         dbg!(pad(
             &input_pixels,
-            &Padding::Custom([1, 2], [1, 1]).unfold(&std::array::from_fn(|i| kernel.shape()[i])),
+            &PaddingSize::Custom([1, 2], [1, 1]).unfold(&std::array::from_fn(|i| kernel.shape()[i])),
             &PaddingMode::Const(7),
         ));
 
         dbg!(pad(
             &input_pixels,
-            &Padding::Custom([4, 4], [1, 1]).unfold(&std::array::from_fn(|i| kernel.shape()[i])),
+            &PaddingSize::Custom([4, 4], [1, 1]).unfold(&std::array::from_fn(|i| kernel.shape()[i])),
             &PaddingMode::Reflect,
         ));
     }

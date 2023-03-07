@@ -4,7 +4,7 @@ pub use conv_2d::fft::Conv2DFftExt;
 pub use conv_2d::Conv2DExt;
 
 #[derive(Debug, Clone, Copy)]
-pub enum Padding<const N: usize> {
+pub enum PaddingSize<const N: usize> {
     Full,
     Same,
     Valid,
@@ -47,14 +47,14 @@ pub(crate) struct ExplictMode<const N: usize, T: num::traits::NumAssign + Copy>(
     pub [[BorderType<T>; 2]; N],
 );
 
-impl<const N: usize> Padding<N> {
+impl<const N: usize> PaddingSize<N> {
     pub(crate) fn unfold(self, kernel_size: &[usize; N]) -> ExplicitPadding<N> {
         match self {
-            Padding::Full => ExplicitPadding {
+            PaddingSize::Full => ExplicitPadding {
                 pad: kernel_size.map(|kernel| [kernel - 1; 2]),
                 stride: std::array::from_fn(|_| 1),
             },
-            Padding::Same => {
+            PaddingSize::Same => {
                 let split = |k_size: usize| {
                     if k_size % 2 == 0 {
                         [(k_size - 1) / 2 + 1, (k_size - 1) / 2]
@@ -68,15 +68,15 @@ impl<const N: usize> Padding<N> {
                     stride: std::array::from_fn(|_| 1),
                 }
             }
-            Padding::Valid => ExplicitPadding {
+            PaddingSize::Valid => ExplicitPadding {
                 pad: std::array::from_fn(|_| [0; 2]),
                 stride: std::array::from_fn(|_| 1),
             },
-            Padding::Custom(pads, strides) => ExplicitPadding {
+            PaddingSize::Custom(pads, strides) => ExplicitPadding {
                 pad: pads.map(|pad| [pad; 2]),
                 stride: strides,
             },
-            Padding::Explicit(pad, stride) => ExplicitPadding { pad, stride },
+            PaddingSize::Explicit(pad, stride) => ExplicitPadding { pad, stride },
         }
     }
 }

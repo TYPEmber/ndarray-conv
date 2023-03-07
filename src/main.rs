@@ -15,7 +15,7 @@ fn main() {
         let now = Instant::now();
         // x.conv_2d(&k);
         // naive_conv::conv_2d(&x, &k);
-        x.conv_2d_fft(&k, Padding::Same, PaddingMode::Zeros);
+        x.conv_2d_fft(&k, PaddingSize::Same, PaddingMode::Zeros);
         // ndarray_conv::conv_2d::fft::conv_2d::<f64, ndarray::OwnedRepr<f64>, ndarray::OwnedRepr<f64>>(
         //     &x, &k,
         // );

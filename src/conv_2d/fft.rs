@@ -4,7 +4,7 @@ use ndarray::{prelude::*, Data, DataOwned};
 use num::{traits::AsPrimitive, traits::NumAssign, Float, ToPrimitive};
 use rustfft::num_traits::FromPrimitive;
 
-use crate::{BorderType, Padding, PaddingMode};
+use crate::{BorderType, ExplicitPadding, PaddingSize, PaddingMode};
 
 use super::fft_2d;
 
@@ -14,7 +14,7 @@ pub trait Conv2DFftExt<T: rustfft::FftNum + Float + NumAssign, S: Data> {
     fn conv_2d_fft(
         &self,
         kernel: &ArrayBase<S, Ix2>,
-        conv_type: Padding<N>,
+        conv_type: PaddingSize<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array2<T>>;
 }
@@ -27,7 +27,7 @@ where
     fn conv_2d_fft(
         &self,
         kernel: &ArrayBase<S, Ix2>,
-        conv_type: Padding<N>,
+        conv_type: PaddingSize<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array2<T>> {
         let conv_type = conv_type.unfold(&[kernel.shape()[0], kernel.shape()[1]]);
@@ -49,6 +49,18 @@ where
             .to_owned(),
         )
     }
+}
+
+pub(crate) fn pad_fft<S, T>(
+    data: &ArrayBase<S, Ix2>,
+    padding: &ExplicitPadding<N>,
+    padding_mode: &PaddingMode<N, T>,
+) -> Option<Array2<T>>
+where
+    S: ndarray::Data<Elem = T>,
+    T: Copy + NumAssign + std::fmt::Debug,
+{
+    None
 }
 
 fn conv_2d_fft_inner<S, T>(
@@ -266,7 +278,7 @@ mod tests {
             .mapv(|x| x as f64)
             .conv_2d_fft(
                 &kernel.mapv(|x| x as f64),
-                Padding::Same,
+                PaddingSize::Same,
                 PaddingMode::Zeros
             )
             .unwrap()
@@ -298,18 +310,15 @@ mod tests {
             [0, 2, 2, 1, 1],
         ];
 
-        let conv_type = Padding::Same.unfold(&[kernel.shape()[0], kernel.shape()[1]]);
+        let conv_type = PaddingSize::Same.unfold(&[kernel.shape()[0], kernel.shape()[1]]);
 
         let (pad_input_size, out_size) = crate::conv_2d::padding::get_size(
             &[input_pixels.shape()[0], input_pixels.shape()[1]],
             &[kernel.shape()[0], kernel.shape()[1]],
             &conv_type,
         );
-        let input_pixels = crate::conv_2d::padding::pad(
-            &input_pixels,
-            &conv_type,
-            &PaddingMode::Zeros,
-        ).unwrap();
+        let input_pixels =
+            crate::conv_2d::padding::pad(&input_pixels, &conv_type, &PaddingMode::Zeros).unwrap();
 
         dbg!(&input_pixels);
 
