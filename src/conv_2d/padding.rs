@@ -314,7 +314,7 @@ where
                 .unwrap()
                 .assign(&bottom_pad);
         },
-        _ => return None
+        _ => return None,
     }
 
     pad_input.into()
