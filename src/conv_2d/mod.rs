@@ -4,16 +4,18 @@ use num::traits::NumAssign;
 pub mod fft;
 mod fft_2d;
 pub mod padding;
-use super::ConvType;
-use crate::padding::{ExplicitConv, ExplictPadding};
-use crate::{PaddingMode, BorderType};
+use super::Padding;
+use crate::{BorderType, PaddingMode};
+use crate::{ExplicitPadding, ExplictMode};
+
+const N: usize = 2;
 
 pub trait Conv2DExt<T: NumAssign + Copy, S: ndarray::Data> {
     fn conv_2d(
         &self,
         kernel: &ArrayBase<S, Ix2>,
-        conv_type: ConvType<2>,
-        padding_mode: PaddingMode<2, T>,
+        conv_type: Padding<N>,
+        padding_mode: PaddingMode<N, T>,
     ) -> Option<Array2<T>>;
 }
 
@@ -25,11 +27,13 @@ where
     fn conv_2d(
         &self,
         kernel: &ArrayBase<S, Ix2>,
-        conv_type: ConvType<2>,
-        padding_mode: PaddingMode<2, T>,
+        conv_type: Padding<N>,
+        padding_mode: PaddingMode<N, T>,
     ) -> Option<Array2<T>> {
-        let input_size = [self.shape()[0], self.shape()[1]];
-        let kernel_size = [kernel.shape()[0], kernel.shape()[1]];
+        let input_size = std::array::from_fn(|i| unsafe { *self.shape().get_unchecked(i) });
+        let kernel_size = std::array::from_fn(|i| unsafe { *kernel.shape().get_unchecked(i) });
+        // let input_size = [self.shape()[0], self.shape()[1]];
+        // let kernel_size = [kernel.shape()[0], kernel.shape()[1]];
 
         let explict_conv_type = conv_type.unfold(&kernel_size);
         let explict_padding_mode = padding_mode.unfold();
@@ -45,9 +49,9 @@ where
             // &padding,
             &pad_input_size,
             &explict_conv_type,
-            &explict_padding_mode,
+            &padding_mode,
             // padding_mode,
-            &out_size
+            &out_size,
         )
     }
 }
@@ -60,9 +64,9 @@ fn conv_2d_inner<S, T>(
     // padding: &[[usize; 2]; 2],
     // stride: &[usize; 2],
     pad_input_size: &[usize; 2],
-    conv_type: &ExplicitConv<2>,
-    padding_mode: &ExplictPadding<2, T>,
-    out_size: &[usize; 2]
+    conv_type: &ExplicitPadding<2>,
+    padding_mode: &PaddingMode<2, T>,
+    out_size: &[usize; 2],
 ) -> Option<Array2<T>>
 where
     S: ndarray::Data<Elem = T>,
@@ -77,7 +81,8 @@ where
     let (pad_input_h, pad_input_w) = (pad_input_size[0], pad_input_size[1]);
 
     // padding
-    let mut pad_input = padding::pad(data, &conv_type.pad, pad_input_size, padding_mode);
+    //let mut pad_input = padding::pad(data, &conv_type.pad, pad_input_size, padding_mode);
+    let mut pad_input = padding::pad(data, conv_type, padding_mode).unwrap();
     // let mut pad_input = Array2::zeros((pad_input_h, pad_input_w));
     // let mut pad_input = pad(data, &padding, &[pad_input_h, pad_input_w], pad_input, padding_mode);
 
@@ -183,7 +188,7 @@ mod tests {
         ];
         assert_eq!(
             input_pixels
-                .conv_2d(&kernel, ConvType::Full, PaddingMode::Zeros)
+                .conv_2d(&kernel, Padding::Full, PaddingMode::Zeros)
                 .unwrap(),
             full_output_pixels
         );
@@ -217,7 +222,7 @@ mod tests {
         // );
         assert_eq!(
             input_pixels
-                .conv_2d(&kernel, ConvType::Same, PaddingMode::Zeros)
+                .conv_2d(&kernel, Padding::Same, PaddingMode::Zeros)
                 .unwrap(),
             same_output_pixels
         );
@@ -239,7 +244,7 @@ mod tests {
         let valid_output_pixels = array![[4, 3, 4], [2, 4, 3], [2, 3, 4]];
         assert_eq!(
             input_pixels
-                .conv_2d(&kernel, ConvType::Valid, PaddingMode::Zeros)
+                .conv_2d(&kernel, Padding::Valid, PaddingMode::Zeros)
                 .unwrap(),
             valid_output_pixels
         );
@@ -271,7 +276,7 @@ mod tests {
             input_pixels
                 .conv_2d(
                     &kernel,
-                    ConvType::Custom(padding, stride),
+                    Padding::Custom(padding, stride),
                     PaddingMode::Zeros
                 )
                 .unwrap(),
@@ -298,7 +303,7 @@ mod tests {
             input_pixels
                 .conv_2d(
                     &kernel,
-                    ConvType::Custom(padding, stride),
+                    Padding::Custom(padding, stride),
                     PaddingMode::Zeros
                 )
                 .unwrap(),
@@ -327,7 +332,7 @@ mod tests {
         ];
         assert_eq!(
             input_pixels
-                .conv_2d(&kernel, ConvType::Same, PaddingMode::Zeros)
+                .conv_2d(&kernel, Padding::Same, PaddingMode::Zeros)
                 .unwrap(),
             torch_same_output_pixels
         );
@@ -348,7 +353,7 @@ mod tests {
         let torch_valid_output_pixels = array![[7, 5, 5], [4, 5, 5]];
         assert_eq!(
             input_pixels
-                .conv_2d(&kernel, ConvType::Valid, PaddingMode::Zeros)
+                .conv_2d(&kernel, Padding::Valid, PaddingMode::Zeros)
                 .unwrap(),
             torch_valid_output_pixels
         );
