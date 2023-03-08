@@ -1,4 +1,4 @@
-use crate::{BorderType, PaddingSize, PaddingMode};
+use crate::{BorderType, PaddingMode, PaddingSize};
 use crate::{ExplicitPadding, ExplictMode};
 use ndarray::prelude::*;
 // use ndarray::{prelude::*, StrideShape};
@@ -84,21 +84,49 @@ where
     S: ndarray::Data<Elem = T>,
     T: Copy + NumAssign + std::fmt::Debug,
 {
-    let buf = match *padding_mode {
+    let mut buf = match *padding_mode {
         PaddingMode::Zeros => return pad_const(data, padding, T::zero()).into(),
         PaddingMode::Const(value) => return pad_const(data, padding, value).into(),
         _ => pad_const(data, padding, T::zero()),
     };
+
+    pad_inner(data, buf.view_mut(), padding, padding_mode)?;
+    buf.into()
+}
+
+#[inline]
+pub(crate) fn pad_inner<'a, S, T>(
+    data: &ArrayBase<S, Ix2>,
+    mut buf: ArrayViewMut2<'a, T>,
+    padding: &ExplicitPadding<N>,
+    padding_mode: &PaddingMode<N, T>,
+) -> Option<ArrayViewMut2<'a, T>>
+where
+    S: ndarray::Data<Elem = T>,
+    T: Copy + NumAssign + std::fmt::Debug,
+{
     let padding_mode = padding_mode.unfold();
     let (input_h, input_w) = (data.shape()[0], data.shape()[1]);
 
-    let buf = pad_inner_row(buf, input_h, input_w, &padding.pad, &padding_mode.0[0])?;
-    let buf = pad_inner_col(buf, input_h, input_w, &padding.pad, &padding_mode.0[1])?;
+    let mut buf_row_padded = pad_inner_row(
+        buf.view_mut(),
+        input_h,
+        input_w,
+        &padding.pad,
+        &padding_mode.0[0],
+    )?;
+    pad_inner_col(
+        buf_row_padded.view_mut(),
+        input_h,
+        input_w,
+        &padding.pad,
+        &padding_mode.0[1],
+    )?;
 
     buf.into()
 }
 
-fn pad_const<S, T>(data: &ArrayBase<S, Ix2>, padding: &ExplicitPadding<N>, value: T) -> Array2<T>
+pub(crate) fn pad_const<S, T>(data: &ArrayBase<S, Ix2>, padding: &ExplicitPadding<N>, value: T) -> Array2<T>
 where
     S: ndarray::Data<Elem = T>,
     T: Copy + NumAssign + std::fmt::Debug,
@@ -112,6 +140,21 @@ where
     ];
     let mut buf = Array2::from_elem(buf_shape, value);
 
+   pad_const_inner(data, buf.view_mut(), padding);
+
+   buf
+}
+
+#[inline]
+pub(crate) fn pad_const_inner<'a, S, T>(
+    data: &ArrayBase<S, Ix2>,
+    mut buf: ArrayViewMut2<'a, T>,
+    padding: &ExplicitPadding<N>,
+) -> ArrayViewMut2<'a, T>
+where
+    S: ndarray::Data<Elem = T>,
+    T: Copy + NumAssign + std::fmt::Debug,
+{
     buf.slice_mut(s!(
         padding.pad[0][0]..data.shape()[0] + padding.pad[0][0],
         padding.pad[1][0]..data.shape()[1] + padding.pad[1][0],
@@ -121,13 +164,13 @@ where
     buf
 }
 
-fn pad_inner_row<T>(
-    mut pad_input: Array2<T>,
+fn pad_inner_row<'a, T>(
+    mut pad_input: ArrayViewMut2<'a, T>,
     input_h: usize,
     input_w: usize,
     padding: &[[usize; 2]; N],
     row_border_type: &[BorderType<T>; 2],
-) -> Option<Array2<T>>
+) -> Option<ArrayViewMut2<'a, T>>
 where
     T: Copy + NumAssign + std::fmt::Debug,
 {
@@ -223,13 +266,13 @@ where
     pad_input.into()
 }
 
-fn pad_inner_col<T>(
-    mut pad_input: Array2<T>,
+fn pad_inner_col<'a, T>(
+    mut pad_input: ArrayViewMut2<'a, T>,
     input_h: usize,
     input_w: usize,
-    padding: &[[usize; 2]; 2],
+    padding: &[[usize; 2]; N],
     col_border_type: &[BorderType<T>; 2],
-) -> Option<Array2<T>>
+) -> Option<ArrayViewMut2<'a, T>>
 where
     T: Copy + NumAssign + std::fmt::Debug,
 {
@@ -337,13 +380,15 @@ mod test {
 
         dbg!(pad(
             &input_pixels,
-            &PaddingSize::Custom([1, 2], [1, 1]).unfold(&std::array::from_fn(|i| kernel.shape()[i])),
+            &PaddingSize::Custom([1, 2], [1, 1])
+                .unfold(&std::array::from_fn(|i| kernel.shape()[i])),
             &PaddingMode::Const(7),
         ));
 
         dbg!(pad(
             &input_pixels,
-            &PaddingSize::Custom([4, 4], [1, 1]).unfold(&std::array::from_fn(|i| kernel.shape()[i])),
+            &PaddingSize::Custom([4, 4], [1, 1])
+                .unfold(&std::array::from_fn(|i| kernel.shape()[i])),
             &PaddingMode::Reflect,
         ));
     }

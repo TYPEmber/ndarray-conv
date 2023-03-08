@@ -1,80 +1,140 @@
 use std::fmt::Display;
 
-use ndarray::{prelude::*, Data, DataOwned};
+use ndarray::{prelude::*, Data, DataMut, DataOwned};
 use num::{traits::AsPrimitive, traits::NumAssign, Float, ToPrimitive};
 use rustfft::num_traits::FromPrimitive;
 
-use crate::{BorderType, ExplicitPadding, PaddingSize, PaddingMode};
+use crate::{BorderType, ExplicitPadding, PaddingMode, PaddingSize};
 
-use super::fft_2d;
+use super::{conv_2d_inner, fft_2d, padding};
 
 const N: usize = 2;
 
-pub trait Conv2DFftExt<T: rustfft::FftNum + Float + NumAssign, S: Data> {
+pub trait Conv2DFftExt<T: rustfft::FftNum + Float + NumAssign, S: Data, SK: Data> {
     fn conv_2d_fft(
         &self,
-        kernel: &ArrayBase<S, Ix2>,
+        kernel: &ArrayBase<SK, Ix2>,
         conv_type: PaddingSize<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array2<T>>;
 }
 
-impl<S, T> Conv2DFftExt<T, S> for ArrayBase<S, Ix2>
+impl<S, SK, T> Conv2DFftExt<T, S, SK> for ArrayBase<S, Ix2>
 where
     S: Data<Elem = T>,
+    SK: Data<Elem = T>,
     T: rustfft::FftNum + Float + NumAssign,
 {
     fn conv_2d_fft(
         &self,
-        kernel: &ArrayBase<S, Ix2>,
-        conv_type: PaddingSize<N>,
+        kernel: &ArrayBase<SK, Ix2>,
+        padding_size: PaddingSize<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array2<T>> {
-        let conv_type = conv_type.unfold(&[kernel.shape()[0], kernel.shape()[1]]);
-        let padding_mode = padding_mode.unfold();
-
-        let input_size = [self.shape()[0], self.shape()[1]];
+        let data_size = [self.shape()[0], self.shape()[1]];
         let kernel_size = [kernel.shape()[0], kernel.shape()[1]];
-        let (pad_input_size, out_size) =
-            super::padding::get_size(&input_size, &kernel_size, &conv_type);
-        // super::padding::pad(self, &conv_type.pad, pad_input_size, padding_mode)
 
-        let (shape, mut ret) = conv_2d_fft_inner(self, kernel);
-        // Some(ret.slice_mut(s!(..shape.0, ..shape.1)).to_owned())
-        Some(
-            ret.slice_mut(s!(
-                (kernel.shape()[0] - 1) / 2..(kernel.shape()[0] - 1) / 2 + self.shape()[0],
-                (kernel.shape()[1] - 1) / 2..(kernel.shape()[1] - 1) / 2 + self.shape()[1],
-            ))
-            .to_owned(),
+        let kernel = Array2::from_shape_vec(
+            kernel_size,
+            kernel.as_slice().unwrap().iter().rev().copied().collect(),
         )
+        .unwrap();
+
+        let padding_size = padding_size.unfold(&kernel_size);
+
+        let data_ext = pad_fft(self, &padding_size, &padding_mode)?;
+        let mut kernel_ext = Array2::from_elem(data_ext.dim(), T::zero());
+        kernel_ext
+            .slice_mut(s![..kernel_size[0], ..kernel_size[1]])
+            .assign(&kernel);
+
+        let (_, ret) = conv_2d_fft_inner(data_ext, kernel_ext);
+
+        let out_size = [
+            (data_size[0] - kernel_size[0] + padding_size.pad[0].iter().sum::<usize>()) + 1,
+            (data_size[1] - kernel_size[1] + padding_size.pad[1].iter().sum::<usize>()) + 1,
+        ];
+
+        ret.slice(s!(
+           kernel_size[0] - 1..kernel_size[0] - 1 + out_size[0];padding_size.stride[0],
+           kernel_size[1] - 1..kernel_size[1] - 1 + out_size[1];padding_size.stride[1],
+        ))
+        .to_owned()
+        .into()
     }
+}
+
+fn get_good_fft_size(size: &[usize; N]) -> [usize; N] {
+    [good_size_cc(size[0]), good_size_rr(size[1])]
 }
 
 pub(crate) fn pad_fft<S, T>(
     data: &ArrayBase<S, Ix2>,
-    padding: &ExplicitPadding<N>,
+    padding_size: &ExplicitPadding<N>,
     padding_mode: &PaddingMode<N, T>,
 ) -> Option<Array2<T>>
 where
     S: ndarray::Data<Elem = T>,
     T: Copy + NumAssign + std::fmt::Debug,
 {
-    None
+    let data_size = std::array::from_fn(|i| data.shape()[i]);
+    let good_size = get_good_fft_size(&data_size);
+    let padded_size = [
+        data_size[0] + padding_size.pad[0].iter().sum::<usize>(),
+        data_size[1] + padding_size.pad[1].iter().sum::<usize>(),
+    ];
+
+    let padded_size = if good_size[0] > padded_size[0] || good_size[1] > padded_size[1] {
+        good_size
+    } else {
+        get_good_fft_size(&padded_size)
+    };
+
+    match *padding_mode {
+        PaddingMode::Zeros => pad_const_fft(data, padded_size, padding_size, T::zero()),
+        PaddingMode::Const(value) => pad_const_fft(data, padded_size, padding_size, value),
+        _ => {
+            let mut buf = Array2::from_elem(padded_size, T::zero());
+            let buf_slice = buf.slice_mut(s!(..padded_size[0], ..padded_size[1]));
+            let buf_slice = padding::pad_const_inner(data, buf_slice, padding_size);
+            padding::pad_inner(data, buf_slice, padding_size, padding_mode)?;
+            buf
+        }
+    }
+    .into()
+}
+
+fn pad_const_fft<S, T>(
+    data: &ArrayBase<S, Ix2>,
+    padded_size: [usize; N],
+    padding_size: &ExplicitPadding<N>,
+    value: T,
+) -> Array2<T>
+where
+    S: ndarray::Data<Elem = T>,
+    T: Copy + NumAssign + std::fmt::Debug,
+{
+    let mut buf = Array2::from_elem(padded_size, value);
+    let buf_slice = buf.slice_mut(s!(..padded_size[0], ..padded_size[1]));
+    let _ = padding::pad_const_inner(data, buf_slice, padding_size);
+
+    buf
 }
 
 fn conv_2d_fft_inner<S, T>(
-    data: &ArrayBase<S, Ix2>,
-    kernel: &ArrayBase<S, Ix2>,
+    mut data_ext: ArrayBase<S, Ix2>,
+    mut kernel_ext: ArrayBase<S, Ix2>,
 ) -> ((usize, usize), Array2<T>)
 where
-    S: Data<Elem = T>,
+    S: DataMut<Elem = T>,
     T: rustfft::FftNum + Float,
 {
-    let output_shape = (
-        data.shape()[0] + kernel.shape()[0] - 1,
-        data.shape()[1] + kernel.shape()[1] - 1,
-    );
+    // let output_shape = (
+    //     data.shape()[0] + kernel.shape()[0] - 1,
+    //     data.shape()[1] + kernel.shape()[1] - 1,
+    // );
+
+    let output_shape = (data_ext.shape()[0], data_ext.shape()[1]);
 
     let fft_shape = output_shape;
 
@@ -96,25 +156,25 @@ where
     //     },
     // );
 
-    let mut data_ext = Array2::zeros(fft_shape);
-    data_ext
-        .slice_mut(s!(..data.shape()[0], ..data.shape()[1]))
-        .assign(data);
+    // let mut data_ext = Array2::zeros(fft_shape);
+    // data_ext
+    //     .slice_mut(s!(..data.shape()[0], ..data.shape()[1]))
+    //     .assign(data);
 
     let mut rp = realfft::RealFftPlanner::new();
     let mut cp = rustfft::FftPlanner::new();
 
     let data_spec = fft_2d::forward(&mut data_ext, &mut rp, &mut cp);
 
-    let kernel = Array2::from_shape_vec(
-        kernel.dim(),
-        kernel.as_slice().unwrap().iter().rev().copied().collect(),
-    )
-    .unwrap();
-    let mut kernel_ext = Array2::zeros(fft_shape);
-    kernel_ext
-        .slice_mut(s![..kernel.shape()[0], ..kernel.shape()[1]])
-        .assign(&kernel);
+    // let kernel = Array2::from_shape_vec(
+    //     kernel.dim(),
+    //     kernel.as_slice().unwrap().iter().rev().copied().collect(),
+    // )
+    // .unwrap();
+    // let mut kernel_ext = Array2::zeros(fft_shape);
+    // kernel_ext
+    //     .slice_mut(s![..kernel.shape()[0], ..kernel.shape()[1]])
+    //     .assign(&kernel);
     let kernel_spec = fft_2d::forward(&mut kernel_ext, &mut rp, &mut cp);
 
     let mut mul_spec = data_spec * kernel_spec;
@@ -310,22 +370,103 @@ mod tests {
             [0, 2, 2, 1, 1],
         ];
 
-        let conv_type = PaddingSize::Same.unfold(&[kernel.shape()[0], kernel.shape()[1]]);
+        // let conv_type = PaddingSize::Same.unfold(&[kernel.shape()[0], kernel.shape()[1]]);
 
-        let (pad_input_size, out_size) = crate::conv_2d::padding::get_size(
-            &[input_pixels.shape()[0], input_pixels.shape()[1]],
-            &[kernel.shape()[0], kernel.shape()[1]],
-            &conv_type,
-        );
-        let input_pixels =
-            crate::conv_2d::padding::pad(&input_pixels, &conv_type, &PaddingMode::Zeros).unwrap();
+        // let (pad_input_size, out_size) = crate::conv_2d::padding::get_size(
+        //     &[input_pixels.shape()[0], input_pixels.shape()[1]],
+        //     &[kernel.shape()[0], kernel.shape()[1]],
+        //     &conv_type,
+        // );
+
+        let ret = input_pixels
+            .mapv(f64::from)
+            .conv_2d_fft(
+                &kernel.mapv(f64::from),
+                PaddingSize::Valid,
+                PaddingMode::Zeros,
+            )
+            .unwrap();
+
+        // let input_pixels = pad_fft(&input_pixels, &conv_type, &PaddingMode::Replicate).unwrap();
+        // let input_pixels =
+        //     crate::conv_2d::padding::pad(&input_pixels, &conv_type, &PaddingMode::Zeros).unwrap();
 
         dbg!(&input_pixels);
 
-        let (_, ret) =
-            conv_2d_fft_inner(&dbg!(input_pixels.mapv(f64::from)), &kernel.mapv(f64::from));
-        dbg!(&ret);
+        // let (_, ret) =
+        //     conv_2d_fft_inner(&dbg!(input_pixels.mapv(f64::from)), &kernel.mapv(f64::from));
+        // dbg!(&ret);
         dbg!(&ret.mapv(|x| x.round() as i32));
+    }
+
+    #[test]
+    fn torch_same_output_pixels() {
+        let input_pixels = array![
+            [1, 1, 1, 0, 0],
+            [0, 1, 1, 1, 0],
+            [0, 0, 1, 1, 1],
+            [0, 0, 1, 1, 0],
+            [0, 1, 1, 0, 0],
+        ];
+
+        let kernel = array![[1, 0, 1], [0, 1, 0], [1, 0, 1], [2, -1, 3]];
+
+        let torch_same_output_pixels = array![
+            [4, 4, 5, 2, 2],
+            [2, 5, 5, 5, 2],
+            [1, 7, 5, 5, 3],
+            [4, 4, 5, 5, 3],
+            [1, 2, 3, 4, 1]
+        ];
+        assert_eq!(
+            input_pixels
+                .mapv(f64::from)
+                .conv_2d_fft(
+                    &kernel.mapv(f64::from),
+                    PaddingSize::Same,
+                    PaddingMode::Zeros
+                )
+                .unwrap()
+                .mapv(|x| x.round() as i32),
+            torch_same_output_pixels
+        );
+    }
+
+    #[test]
+    fn custom_conv_with_pad_test() {
+        let input_pixels = array![
+            [1, 1, 1, 0, 0],
+            [0, 1, 1, 1, 0],
+            [0, 0, 1, 1, 1],
+            [0, 0, 1, 1, 0],
+            [0, 1, 1, 0, 0],
+        ];
+
+        let kernel = array![[1, 0, 1], [0, 1, 0], [1, 0, 1], [2, -1, 3]];
+
+        let padding = [2, 0];
+        let stride = [1, 1];
+        let custom_conv_with_pad_output_pixels = array![
+            [4, 5, 2],
+            [5, 5, 5],
+            [7, 5, 5],
+            [4, 5, 5],
+            [2, 3, 4],
+            [2, 2, 1]
+        ];
+
+        assert_eq!(
+            input_pixels
+                .mapv(f64::from)
+                .conv_2d_fft(
+                    &kernel.mapv(f64::from),
+                    PaddingSize::Custom(padding, stride),
+                    PaddingMode::Zeros
+                )
+                .unwrap()
+                .mapv(|x| x.round() as i32),
+            custom_conv_with_pad_output_pixels
+        );
     }
 
     #[test]
