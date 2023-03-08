@@ -350,7 +350,7 @@ where
 
             // bottom padding
             let bottom_pad = pad_input.slice(s!(padding_h[0]..padding_h[0] + padding_h[1], ..));
-
+            
             (&pad_input.slice(s!(padding_h[0] + input_h.., ..)) as *const ArrayView2<T>
                 as *mut ArrayViewMut2<T>)
                 .as_mut()

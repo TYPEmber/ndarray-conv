@@ -84,17 +84,19 @@ where
         data_size[1] + padding_size.pad[1].iter().sum::<usize>(),
     ];
 
-    let padded_size = if good_size[0] > padded_size[0] || good_size[1] > padded_size[1] {
+    let fft_size = if good_size[0] > padded_size[0] || good_size[1] > padded_size[1] {
         good_size
     } else {
         get_good_fft_size(&padded_size)
     };
 
     match *padding_mode {
-        PaddingMode::Zeros => pad_const_fft(data, padded_size, padding_size, T::zero()),
-        PaddingMode::Const(value) => pad_const_fft(data, padded_size, padding_size, value),
+        PaddingMode::Zeros => pad_const_fft(data, fft_size, padded_size, padding_size, T::zero()),
+        PaddingMode::Const(value) => {
+            pad_const_fft(data, fft_size, padded_size, padding_size, value)
+        }
         _ => {
-            let mut buf = Array2::from_elem(padded_size, T::zero());
+            let mut buf = Array2::from_elem(fft_size, T::zero());
             let buf_slice = buf.slice_mut(s!(..padded_size[0], ..padded_size[1]));
             let buf_slice = padding::pad_const_inner(data, buf_slice, padding_size);
             padding::pad_inner(data, buf_slice, padding_size, padding_mode)?;
@@ -106,6 +108,7 @@ where
 
 fn pad_const_fft<S, T>(
     data: &ArrayBase<S, Ix2>,
+    fft_size: [usize; N],
     padded_size: [usize; N],
     padding_size: &ExplicitPadding<N>,
     value: T,
@@ -114,7 +117,7 @@ where
     S: ndarray::Data<Elem = T>,
     T: Copy + NumAssign + std::fmt::Debug,
 {
-    let mut buf = Array2::from_elem(padded_size, value);
+    let mut buf = Array2::from_elem(fft_size, value);
     let buf_slice = buf.slice_mut(s!(..padded_size[0], ..padded_size[1]));
     let _ = padding::pad_const_inner(data, buf_slice, padding_size);
 
@@ -383,7 +386,7 @@ mod tests {
             .conv_2d_fft(
                 &kernel.mapv(f64::from),
                 PaddingSize::Valid,
-                PaddingMode::Zeros,
+                PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
             )
             .unwrap();
 
