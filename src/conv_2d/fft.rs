@@ -84,7 +84,7 @@ where
         data_size[1] + padding_size.pad[1].iter().sum::<usize>(),
     ];
 
-    let fft_size = if good_size[0] > padded_size[0] || good_size[1] > padded_size[1] {
+    let fft_size = if good_size[0] > padded_size[0] && good_size[1] > padded_size[1] {
         good_size
     } else {
         get_good_fft_size(&padded_size)
