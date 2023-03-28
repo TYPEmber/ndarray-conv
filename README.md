@@ -16,6 +16,11 @@ ndarray-conv is still under heavily developing, the first stage aims to provide 
 
 - [x] basic conv_2d
 - [x] use fft to accelerate big kernel's conv_2d computation
+- [x] impl padding_size and padding_mode
+  - [x] PaddingSize: Full Same Valid Custom Explicit
+  - [x] PaddingMode: Zeros Const Reflect Replicate Circular Custom Explicit
+- [ ] strides for kernel and data
+- [ ] explict error type
 
 ## Roughly Bench
 
@@ -51,13 +56,18 @@ fn main() {
 
     let mut small_duration = 0u128;
     let test_cycles_small = 1;
-    // small input images
+    // small input data
     for _ in 0..test_cycles_small {
         let x = Array::random((2000, 4000), Uniform::new(0., 1.));
         let k = Array::random((9, 9), Uniform::new(0., 1.));
 
         let now = Instant::now();
-        x.conv_2d(&k);
+        // or use x.conv_2d_fft() for large input data
+        x.conv_2d(
+            &k,
+            PaddingSize::Same,
+            PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
+        );
         small_duration += now.elapsed().as_nanos();
     }
 
