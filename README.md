@@ -43,7 +43,16 @@ as fast as opencv on large data and kernel (2000, 5000) * (21, 41)
 
 ```rust
     use ndarray_conv::*;
-    x.conv_2d(&k);
+     x.conv_2d(
+        &k,
+        PaddingSize::Full,
+        PaddingMode::Circular,
+    );
+     x.conv_2d_fft(
+        &k,
+        PaddingSize::Same,
+        PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
+    );
 ```
 
 ```rust
