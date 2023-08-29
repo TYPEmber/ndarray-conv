@@ -2,6 +2,8 @@ use ndarray::prelude::*;
 use num::{traits::*, Integer};
 use std::fmt::{Debug, Display};
 use transpose::transpose;
+use rayon::prelude::*;
+
 pub fn inverse<T>(
     arr: &mut Array2<rustfft::num_complex::Complex<T>>,
     origin_len: usize,
@@ -55,7 +57,7 @@ where
 
         ndarray::Zip::from(input_t.rows_mut())
             .and(output_t.rows_mut())
-            .for_each(|mut row, mut output| {                
+            .par_for_each(|mut row, mut output| {                
                 if ifft_row.len().is_odd() {
                     unsafe { row.uget_mut(0).im = T::zero() };
                 } else {
@@ -103,7 +105,7 @@ where
 
     ndarray::Zip::from(input.rows_mut())
         .and(output.rows_mut())
-        .for_each(|mut row, mut output| {
+        .par_for_each(|mut row, mut output| {
             fft_row
                 .process(row.as_slice_mut().unwrap(), output.as_slice_mut().unwrap())
                 .unwrap();
