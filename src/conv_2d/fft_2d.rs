@@ -17,11 +17,11 @@ where
     let ifft_row = r_planner.plan_fft_inverse(origin_len);
     let ifft_col = c_planner.plan_fft_inverse(arr.shape()[1]);
 
-    ifft_col.process(arr.as_slice_mut().unwrap());
+    // ifft_col.process(arr.as_slice_mut().unwrap());
 
-    // ndarray::Zip::from(arr.rows_mut()).par_for_each(|mut row| {
-    //     ifft_col.process(row.as_slice_mut().unwrap());
-    // });
+    ndarray::Zip::from(arr.rows_mut()).par_for_each(|mut row| {
+        ifft_col.process(row.as_slice_mut().unwrap());
+    });
 
     let mut output_t = Array2::zeros((arr.shape()[1], origin_len));
 
@@ -130,13 +130,13 @@ where
     ];
     transpose::transpose(&output, &mut output_t, ny / 2 + 1, nx);
 
-    fft_col.process(&mut output_t);
+    // fft_col.process(&mut output_t);
 
     let mut output_t = Array2::from_shape_vec((ny / 2 + 1, nx), output_t).unwrap();
 
-    // ndarray::Zip::from(output_t.rows_mut()).par_for_each(|mut row| {
-    //     fft_col.process(row.as_slice_mut().unwrap());
-    // });
+    ndarray::Zip::from(output_t.rows_mut()).par_for_each(|mut row| {
+        fft_col.process(row.as_slice_mut().unwrap());
+    });
 
     // for mut row in output_t.rows_mut() {
     //     fft_col.process(row.as_slice_mut().unwrap());
