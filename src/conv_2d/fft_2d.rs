@@ -55,15 +55,21 @@ where
         //         ifft_row.process(row, output).unwrap();
         //     });
 
+        let pre_process = if ifft_row.len().is_odd() {
+            |row: &mut ArrayBase<ndarray::ViewRepr<&mut num::Complex<T>>, Dim<[usize; 1]>>| unsafe {
+                row.uget_mut(0).im = T::zero();
+            }
+        } else {
+            |row: &mut ArrayBase<ndarray::ViewRepr<&mut num::Complex<T>>, Dim<[usize; 1]>>| unsafe {
+                row.uget_mut(0).im = T::zero();
+                row.uget_mut(row.len() - 1).im = T::zero();
+            }
+        };
+
         ndarray::Zip::from(input_t.rows_mut())
             .and(output_t.rows_mut())
-            .par_for_each(|mut row, mut output| {                
-                if ifft_row.len().is_odd() {
-                    unsafe { row.uget_mut(0).im = T::zero() };
-                } else {
-                    unsafe { row.uget_mut(0).im = T::zero() };
-                    unsafe { row.uget_mut(row.len() - 1).im = T::zero() }
-                };
+            .par_for_each(|mut row, mut output| {
+                pre_process(&mut row);
 
                 ifft_row
                     .process(row.as_slice_mut().unwrap(), output.as_slice_mut().unwrap())
