@@ -102,27 +102,26 @@ where
         });
         let mut ret = Array::zeros(output_shape);
 
-        // dbg!(ret.shape());
-
         let shape: [usize; N] = std::array::from_fn(|i| ret.raw_dim()[i]);
         let strides: [usize; N] =
             std::array::from_fn(|i| cm.strides[i] * pds.strides()[i] as usize);
 
-        // dbg!(&pds);
-        // dbg!(shape.strides(strides));
-
         unsafe {
+            // use raw pointer to improve performance.
+            let p: *mut T = ret.as_mut_ptr();
+
+            // use ArrayView's iter without handle strides
             let view =
                 ArrayView::from_shape(shape.strides(strides), pds.as_slice().unwrap()).unwrap();
 
-            view.iter().zip(ret.iter_mut()).for_each(|(cur, r)| {
+            view.iter().enumerate().for_each(|(i, cur)| {
                 let mut tmp_res = T::zero();
 
                 offset_list.iter().for_each(|(tmp_offset, tmp_kernel)| {
                     tmp_res += *(cur as *const T).offset(*tmp_offset) * *tmp_kernel
                 });
 
-                *r = tmp_res;
+                *p.add(i) = tmp_res;
             });
         }
 
@@ -199,7 +198,6 @@ mod tests {
             .unwrap();
         assert_eq!(res, array![0, 1, 6, 12, 11, 0]);
         dbg!(res);
-
 
         let arr = array![1, 2, 3, 4, 5, 6];
         let kernel = array![1, 1, 1];

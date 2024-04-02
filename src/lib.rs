@@ -6,9 +6,9 @@ mod padding;
 // pub use conv_2d::fft::Conv2DFftExt;
 // pub use conv_2d::Conv2DExt;
 
+pub use conv::ConvExt;
 use conv::ExplicitConv;
 pub use padding::ExplicitPadding;
-pub use conv::ConvExt;
 
 use ndarray::{ArrayBase, Dim, Dimension, IntoDimension, Ix};
 
