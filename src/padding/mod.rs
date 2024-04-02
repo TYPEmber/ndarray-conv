@@ -1,10 +1,10 @@
-use std::ops::{Add, AddAssign, Mul, Sub};
+use std::ops::Add;
 
 use super::{BorderType, PaddingMode};
 
 use ndarray::{
-    array, Array, ArrayBase, ArrayViewMut, Axis, Data, DataMut, DataOwned, Dim, Dimension,
-    IntoDimension, Ix, OwnedRepr, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem,
+    Array, ArrayBase, Data, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis, SliceArg,
+    SliceInfo, SliceInfoElem,
 };
 
 mod dim;
@@ -261,6 +261,10 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::ops::AddAssign;
+
+    use ndarray::prelude::*;
+
     use super::*;
     use crate::dilation::IntoKernelWithDilation;
     use crate::ConvMode;

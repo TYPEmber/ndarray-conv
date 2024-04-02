@@ -1,5 +1,5 @@
 use ndarray::{
-    Array, ArrayBase, Axis, Data, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis,
+    Array, ArrayBase, Axis, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis,
     SliceArg, SliceInfo, SliceInfoElem,
 };
 

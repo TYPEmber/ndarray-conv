@@ -1,14 +1,14 @@
 use std::fmt::Debug;
 
 use ndarray::{
-    prelude::*, Data, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem,
+    Array, ArrayBase, ArrayView, Data, Dim, Dimension, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem
 };
 use num::traits::NumAssign;
 
 use crate::{
     dilation::{IntoKernelWithDilation, KernelWithDilation},
     padding::PaddingExt,
-    ConvMode, ExplicitPadding, PaddingMode,
+    ConvMode, PaddingMode,
 };
 
 pub struct ExplicitConv<const N: usize> {
@@ -115,7 +115,7 @@ where
 
             // use ArrayView's iter without handle strides
             let view =
-                ArrayView::from_shape(shape.strides(strides), pds.as_slice().unwrap()).unwrap();
+                ArrayView::from_shape(ndarray::ShapeBuilder::strides(shape, strides), pds.as_slice().unwrap()).unwrap();
 
             view.iter().enumerate().for_each(|(i, cur)| {
                 let mut tmp_res = T::zero();
@@ -135,8 +135,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::dilation::WithDilation;
-
     use super::*;
+    use ndarray::prelude::*;
 
     #[test]
     fn tch_conv2d() {

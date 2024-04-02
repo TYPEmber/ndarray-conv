@@ -1,6 +1,6 @@
 use ndarray::{
-    Array, ArrayBase, Axis, Data, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis,
-    SliceArg, SliceInfo, SliceInfoElem,
+    ArrayBase, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis, SliceArg, SliceInfo,
+    SliceInfoElem,
 };
 
 use super::half_dim;

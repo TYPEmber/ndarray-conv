@@ -1,34 +1,10 @@
-// mod conv_2d;
 mod conv;
 mod dilation;
 mod padding;
 
-// pub use conv_2d::fft::Conv2DFftExt;
-// pub use conv_2d::Conv2DExt;
-
 pub use conv::ConvExt;
-use conv::ExplicitConv;
 pub use padding::ExplicitPadding;
 
-use ndarray::{ArrayBase, Dim, Dimension, IntoDimension, Ix};
-
-// pub trait IntoExplicit<const N: usize> {
-//     fn into_explicit(self) -> [usize; N];
-// }
-
-// impl<const N: usize> IntoExplicit<N> for usize {
-//     #[inline]
-//     fn into_explicit(self) -> [usize; N] {
-//         [self; N]
-//     }
-// }
-
-// impl<const N: usize> IntoExplicit<N> for [usize; N] {
-//     #[inline]
-//     fn into_explicit(self) -> [usize; N] {
-//         self
-//     }
-// }
 
 #[derive(Debug, Clone, Copy)]
 pub enum ConvMode<const N: usize> {
@@ -68,44 +44,3 @@ pub enum BorderType<T: num::traits::NumAssign + Copy> {
     Replicate,
     Circular,
 }
-
-// impl<const N: usize> ConvMode<N> {
-//     pub(crate) fn unfold<S>(self, kernel: &ArrayBase<S, Dim<[Ix; N]>>) -> ExplicitConv<N>
-//     where
-//         S: ndarray::RawData,
-//         Dim<[Ix; N]>: Dimension,
-//         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-//     {
-//         let kernel_dim = unsafe {
-//             (kernel.shape().as_ptr() as *const [usize; N])
-//                 .as_ref()
-//                 .unwrap()
-//         };
-
-//         match self {
-//             ConvMode::Full => ExplicitConv {
-//                 padding: kernel_dim.map(|kernel| [kernel - 1; 2]),
-//                 strides: [1; N],
-//             },
-//             ConvMode::Same => ExplicitConv {
-//                 padding: kernel_dim.map(|k_size: usize| {
-//                     if k_size % 2 == 0 {
-//                         [(k_size - 1) / 2 + 1, (k_size - 1) / 2]
-//                     } else {
-//                         [(k_size - 1) / 2; 2]
-//                     }
-//                 }),
-//                 strides: [1; N],
-//             },
-//             ConvMode::Valid => ExplicitConv {
-//                 padding: [[0; 2]; N],
-//                 strides: [1; N],
-//             },
-//             ConvMode::Custom { padding, strides } => ExplicitConv {
-//                 padding: padding.map(|pad| [pad; 2]),
-//                 strides,
-//             },
-//             ConvMode::Explicit { padding, strides } => ExplicitConv { padding, strides },
-//         }
-//     }
-// }
