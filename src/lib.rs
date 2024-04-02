@@ -1,17 +1,50 @@
-mod conv_2d;
+// mod conv_2d;
+mod conv;
+mod dilation;
+mod padding;
 
-pub use conv_2d::fft::Conv2DFftExt;
-pub use conv_2d::Conv2DExt;
+// pub use conv_2d::fft::Conv2DFftExt;
+// pub use conv_2d::Conv2DExt;
+
+use conv::ExplicitConv;
+pub use padding::ExplicitPadding;
+pub use conv::ConvExt;
+
+use ndarray::{ArrayBase, Dim, Dimension, IntoDimension, Ix};
+
+// pub trait IntoExplicit<const N: usize> {
+//     fn into_explicit(self) -> [usize; N];
+// }
+
+// impl<const N: usize> IntoExplicit<N> for usize {
+//     #[inline]
+//     fn into_explicit(self) -> [usize; N] {
+//         [self; N]
+//     }
+// }
+
+// impl<const N: usize> IntoExplicit<N> for [usize; N] {
+//     #[inline]
+//     fn into_explicit(self) -> [usize; N] {
+//         self
+//     }
+// }
 
 #[derive(Debug, Clone, Copy)]
-pub enum PaddingSize<const N: usize> {
+pub enum ConvMode<const N: usize> {
     Full,
     Same,
     Valid,
     // (pad, stride)
-    Custom([usize; N], [usize; N]),
+    Custom {
+        padding: [usize; N],
+        strides: [usize; N],
+    },
     // (pad, stride)
-    Explicit([[usize; 2]; N], [usize; N]),
+    Explicit {
+        padding: [[usize; 2]; N],
+        strides: [usize; N],
+    },
 }
 
 // padding mode. It can be either a single BorderType applied on all sides or a custom tuple of two BorderTypes for (H, W), respectively.
@@ -36,61 +69,43 @@ pub enum BorderType<T: num::traits::NumAssign + Copy> {
     Circular,
 }
 
-#[derive(Debug)]
-pub(crate) struct ExplicitPadding<const N: usize> {
-    pub pad: [[usize; 2]; N],
-    pub stride: [usize; N],
-}
+// impl<const N: usize> ConvMode<N> {
+//     pub(crate) fn unfold<S>(self, kernel: &ArrayBase<S, Dim<[Ix; N]>>) -> ExplicitConv<N>
+//     where
+//         S: ndarray::RawData,
+//         Dim<[Ix; N]>: Dimension,
+//         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
+//     {
+//         let kernel_dim = unsafe {
+//             (kernel.shape().as_ptr() as *const [usize; N])
+//                 .as_ref()
+//                 .unwrap()
+//         };
 
-#[derive(Debug)]
-pub(crate) struct ExplictMode<const N: usize, T: num::traits::NumAssign + Copy>(
-    pub [[BorderType<T>; 2]; N],
-);
-
-impl<const N: usize> PaddingSize<N> {
-    pub(crate) fn unfold(self, kernel_size: &[usize; N]) -> ExplicitPadding<N> {
-        match self {
-            PaddingSize::Full => ExplicitPadding {
-                pad: kernel_size.map(|kernel| [kernel - 1; 2]),
-                stride: std::array::from_fn(|_| 1),
-            },
-            PaddingSize::Same => {
-                let split = |k_size: usize| {
-                    if k_size % 2 == 0 {
-                        [(k_size - 1) / 2 + 1, (k_size - 1) / 2]
-                    } else {
-                        [(k_size - 1) / 2; 2]
-                    }
-                };
-
-                ExplicitPadding {
-                    pad: kernel_size.map(split),
-                    stride: std::array::from_fn(|_| 1),
-                }
-            }
-            PaddingSize::Valid => ExplicitPadding {
-                pad: std::array::from_fn(|_| [0; 2]),
-                stride: std::array::from_fn(|_| 1),
-            },
-            PaddingSize::Custom(pads, strides) => ExplicitPadding {
-                pad: pads.map(|pad| [pad; 2]),
-                stride: strides,
-            },
-            PaddingSize::Explicit(pad, stride) => ExplicitPadding { pad, stride },
-        }
-    }
-}
-
-impl<const N: usize, T: num::traits::NumAssign + Copy> PaddingMode<N, T> {
-    pub(crate) fn unfold(self) -> ExplictMode<N, T> {
-        match self {
-            PaddingMode::Zeros => ExplictMode([[BorderType::Zeros; 2]; N]),
-            PaddingMode::Const(num) => ExplictMode([[BorderType::Const(num); 2]; N]),
-            PaddingMode::Reflect => ExplictMode([[BorderType::Reflect; 2]; N]),
-            PaddingMode::Replicate => ExplictMode([[BorderType::Replicate; 2]; N]),
-            PaddingMode::Circular => ExplictMode([[BorderType::Circular; 2]; N]),
-            PaddingMode::Custom(borders) => ExplictMode(borders.map(|border| [border; 2])),
-            PaddingMode::Explicit(borders) => ExplictMode(borders),
-        }
-    }
-}
+//         match self {
+//             ConvMode::Full => ExplicitConv {
+//                 padding: kernel_dim.map(|kernel| [kernel - 1; 2]),
+//                 strides: [1; N],
+//             },
+//             ConvMode::Same => ExplicitConv {
+//                 padding: kernel_dim.map(|k_size: usize| {
+//                     if k_size % 2 == 0 {
+//                         [(k_size - 1) / 2 + 1, (k_size - 1) / 2]
+//                     } else {
+//                         [(k_size - 1) / 2; 2]
+//                     }
+//                 }),
+//                 strides: [1; N],
+//             },
+//             ConvMode::Valid => ExplicitConv {
+//                 padding: [[0; 2]; N],
+//                 strides: [1; N],
+//             },
+//             ConvMode::Custom { padding, strides } => ExplicitConv {
+//                 padding: padding.map(|pad| [pad; 2]),
+//                 strides,
+//             },
+//             ConvMode::Explicit { padding, strides } => ExplicitConv { padding, strides },
+//         }
+//     }
+// }
