@@ -1,6 +1,6 @@
 use ndarray::{
-    Array, ArrayBase, Axis, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis,
-    SliceArg, SliceInfo, SliceInfoElem,
+    Array, ArrayBase, Axis, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis, SliceArg,
+    SliceInfo, SliceInfoElem,
 };
 
 #[inline]

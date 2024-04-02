@@ -11,19 +11,9 @@ where
     S: Data<Elem = T>,
     Dim<[Ix; N]>: Dimension,
 {
-    pub fn gen_offset_list(&self, shape: &[usize]) -> Vec<(isize, T)> {
-        let mut strides: [isize; N] = [0; N];
-
-        strides
-            .iter_mut()
-            .take(N)
-            .zip(shape.iter().take(N))
-            .zip(self.dilation)
-            .rev()
-            .fold(1, |last_len, ((s, &d), dilation)| {
-                *s = dilation as isize * last_len;
-                d as isize
-            });
+    pub fn gen_offset_list(&self, pds_strides: &[isize]) -> Vec<(isize, T)> {
+        let strides: [isize; N] =
+            std::array::from_fn(|i| self.dilation[i] as isize * pds_strides[i]);
 
         self.kernel
             .indexed_iter()

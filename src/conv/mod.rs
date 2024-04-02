@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
 use ndarray::{
-    Array, ArrayBase, ArrayView, Data, Dim, Dimension, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem
+    Array, ArrayBase, ArrayView, Data, Dim, Dimension, IntoDimension, Ix, RemoveAxis, SliceArg,
+    SliceInfo, SliceInfoElem,
 };
 use num::traits::NumAssign;
 
@@ -87,7 +88,7 @@ where
         let cm = conv_mode.unfold(&kernel);
         let pds = self.padding(padding_mode, cm.padding);
 
-        let offset_list = kernel.gen_offset_list(pds.shape());
+        let offset_list = kernel.gen_offset_list(pds.strides());
 
         let self_raw_dim = self.raw_dim();
         let kernel_raw_dim = kernel.kernel.raw_dim();
@@ -114,8 +115,11 @@ where
             let p: *mut T = ret.as_mut_ptr();
 
             // use ArrayView's iter without handle strides
-            let view =
-                ArrayView::from_shape(ndarray::ShapeBuilder::strides(shape, strides), pds.as_slice().unwrap()).unwrap();
+            let view = ArrayView::from_shape(
+                ndarray::ShapeBuilder::strides(shape, strides),
+                pds.as_slice().unwrap(),
+            )
+            .unwrap();
 
             view.iter().enumerate().for_each(|(i, cur)| {
                 let mut tmp_res = T::zero();
@@ -134,8 +138,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::dilation::WithDilation;
     use super::*;
+    use crate::dilation::WithDilation;
     use ndarray::prelude::*;
 
     #[test]
@@ -229,6 +233,34 @@ mod tests {
 
     #[test]
     fn aligned_with_libtorch() {
+        let tensor = tch::Tensor::from_slice(&[1, 2, 3, 4, 5, 6])
+            .to_dtype(tch::Kind::Float, false, true)
+            .reshape([1, 1, 6]);
+        let kernel = tch::Tensor::from_slice(&[1, 1, 1])
+            .to_dtype(tch::Kind::Float, false, true)
+            .reshape([1, 1, 3]);
+
+        let result = tensor.f_conv1d::<tch::Tensor>(&kernel, None, 2, 4, 2, 1);
+        result.unwrap().print();
+
+        let arr = array![1, 2, 3, 4, 5, 6];
+        let kernel = array![1, 1, 1];
+
+        let res = arr
+            .conv(
+                kernel.with_dilation(2),
+                ConvMode::Custom {
+                    padding: [4],
+                    strides: [2],
+                },
+                PaddingMode::Zeros,
+            )
+            .unwrap();
+        assert_eq!(res, array![1, 4, 9, 8, 5]);
+        dbg!(res);
+
+        //
+
         let tensor = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
             .to_dtype(tch::Kind::Float, false, true)
             .reshape([1, 1, 3, 3]);
@@ -248,6 +280,8 @@ mod tests {
         assert_eq!(res, array![[4, 2, 4], [2, 1, 2], [4, 2, 4]]);
         dbg!(res);
 
+        //
+
         let tensor = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
             .to_dtype(tch::Kind::Float, false, true)
             .reshape([1, 1, 3, 3]);
@@ -265,6 +299,40 @@ mod tests {
             .conv(kernel.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
             .unwrap();
         assert_eq!(res, array![[2, 1, 2], [4, 2, 4], [2, 1, 2]]);
+        dbg!(res);
+
+        //
+
+        let tensor = tch::Tensor::from_slice(&[1, 2, 3, 4, 5, 6, 7, 8])
+            .to_dtype(tch::Kind::Float, false, true)
+            .reshape([1, 1, 2, 2, 2]);
+        let kernel = tch::Tensor::from_slice(&[
+            // 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        ])
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape([1, 1, 2, 3, 3]);
+
+        let result = tensor.f_conv3d::<tch::Tensor>(&kernel, None, [1, 2, 1], 2, 2, 1);
+        result.unwrap().print();
+
+        let arr = array![[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+        let kernel = array![
+            [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+            [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+        ];
+
+        let res = arr
+            .conv(
+                kernel.with_dilation(2),
+                ConvMode::Custom {
+                    padding: [2, 2, 2],
+                    strides: [1, 2, 1],
+                },
+                PaddingMode::Zeros,
+            )
+            .unwrap();
+        assert_eq!(res, array![[[1, 2]], [[5, 6]], [[1, 2]], [[5, 6]]]);
         dbg!(res);
     }
 }

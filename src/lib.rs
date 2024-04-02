@@ -5,7 +5,6 @@ mod padding;
 pub use conv::ConvExt;
 pub use padding::ExplicitPadding;
 
-
 #[derive(Debug, Clone, Copy)]
 pub enum ConvMode<const N: usize> {
     Full,
