@@ -106,6 +106,9 @@ where
         let strides: [usize; N] =
             std::array::from_fn(|i| cm.strides[i] * pds.strides()[i] as usize);
 
+        // dbg!(&offset_list);
+        // dbg!(strides);
+
         unsafe {
             // use raw pointer to improve performance.
             let p: *mut T = ret.as_mut_ptr();
@@ -145,15 +148,23 @@ mod tests {
         let tensor = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
             .to_dtype(tch::Kind::Float, false, true)
             .reshape([1, 1, 3, 3]);
-        let kernel = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
+        let kernel = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1]])
             .to_dtype(tch::Kind::Float, false, true)
-            .reshape([1, 1, 3, 3]);
+            .reshape([1, 1, 2, 3]);
         // let kernel = tch::Tensor::from_slice2(&[[1]])
         //     .to_dtype(tch::Kind::Float, false, true)
         //     .reshape([1, 1, 1, 1]);
         // let result = tensor.f_conv2d::<tch::Tensor>(&kernel, None, 1, [1, 1], 3i64, 1);
         let result = tensor.f_conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 2, 1);
         result.unwrap().print();
+
+        let arr = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
+        let kernel = array![[1, 1, 1], [1, 1, 1]];
+
+        let res = arr
+            .conv(kernel.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
+            .unwrap();
+        dbg!(res);
     }
 
     #[test]
@@ -213,6 +224,47 @@ mod tests {
             )
             .unwrap();
         assert_eq!(res, array![1, 4, 9, 8, 5]);
+        dbg!(res);
+    }
+
+    #[test]
+    fn aligned_with_libtorch() {
+        let tensor = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
+            .to_dtype(tch::Kind::Float, false, true)
+            .reshape([1, 1, 3, 3]);
+        let kernel = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
+            .to_dtype(tch::Kind::Float, false, true)
+            .reshape([1, 1, 3, 3]);
+
+        let result = tensor.f_conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 2, 1);
+        result.unwrap().print();
+
+        let arr = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
+        let kernel = array![[1, 1, 1], [1, 1, 1,], [1, 1, 1]];
+
+        let res = arr
+            .conv(kernel.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
+            .unwrap();
+        assert_eq!(res, array![[4, 2, 4], [2, 1, 2], [4, 2, 4]]);
+        dbg!(res);
+
+        let tensor = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
+            .to_dtype(tch::Kind::Float, false, true)
+            .reshape([1, 1, 3, 3]);
+        let kernel = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1]])
+            .to_dtype(tch::Kind::Float, false, true)
+            .reshape([1, 1, 2, 3]);
+
+        let result = tensor.f_conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 2, 1);
+        result.unwrap().print();
+
+        let arr = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
+        let kernel = array![[1, 1, 1], [1, 1, 1]];
+
+        let res = arr
+            .conv(kernel.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
+            .unwrap();
+        assert_eq!(res, array![[2, 1, 2], [4, 2, 4], [2, 1, 2]]);
         dbg!(res);
     }
 }

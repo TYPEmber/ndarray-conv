@@ -12,7 +12,6 @@ where
     Dim<[Ix; N]>: Dimension,
 {
     pub fn gen_offset_list(&self, shape: &[usize]) -> Vec<(isize, T)> {
-        // let strides = self.kernel.strides();
         let mut strides: [isize; N] = [0; N];
 
         strides
@@ -23,7 +22,7 @@ where
             .rev()
             .fold(1, |last_len, ((s, &d), dilation)| {
                 *s = dilation as isize * last_len;
-                (d * dilation - dilation + 1) as isize
+                d as isize
             });
 
         self.kernel
