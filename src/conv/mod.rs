@@ -28,7 +28,7 @@ impl<const N: usize> ConvMode<N> {
         // [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     {
         let kernel_dim = kernel.kernel.raw_dim();
-        let kernel_dim: [usize; N] = std::array::from_fn(|i| 
+        let kernel_dim: [usize; N] = std::array::from_fn(|i|
                 // k + (k - 1) * (d - 1)
                 kernel_dim[i] * kernel.dilation[i] - kernel.dilation[i] + 1);
 
@@ -61,32 +61,54 @@ impl<const N: usize> ConvMode<N> {
     }
 }
 
-pub trait ConvExt<'a, T: NumAssign + Copy, S: ndarray::RawData, const N: usize> {
+pub trait ConvExt<
+    'a,
+    T: NumAssign + Copy,
+    TK: NumAssign + Copy,
+    S: ndarray::RawData,
+    SK: ndarray::RawData,
+    const N: usize,
+>
+{
     fn conv(
         &self,
-        kernel: impl IntoKernelWithDilation<'a, S, N>,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array<T, Dim<[Ix; N]>>>;
 }
 
-impl<'a, T: NumAssign + Copy, S: ndarray::RawData, const N: usize> ConvExt<'a, T, S, N>
-    for ArrayBase<S, Dim<[Ix; N]>>
+impl<
+        'a,
+        T: NumAssign + Copy,
+        TK: NumAssign + Copy,
+        S: ndarray::RawData,
+        SK: ndarray::RawData,
+        const N: usize,
+    > ConvExt<'a, T, TK, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
 where
     T: num::traits::NumAssign + Copy + Debug,
     S: Data<Elem = T> + 'a,
+    SK: Data<Elem = TK> + 'a,
     Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
+    T: From<TK>,
 {
     fn conv(
         &self,
-        kernel: impl IntoKernelWithDilation<'a, S, N>,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array<T, Dim<[Ix; N]>>> {
         let kernel = kernel.into_kernel_with_dilation();
+
+        let a = kernel.kernel;
+
+        // if kernel.dilation.iter == 0 {
+        //     return None;
+        // }
 
         let cm = conv_mode.unfold(&kernel);
         let pds = self.padding(padding_mode, cm.padding);
@@ -128,7 +150,7 @@ where
                 let mut tmp_res = T::zero();
 
                 offset_list.iter().for_each(|(tmp_offset, tmp_kernel)| {
-                    tmp_res += *(cur as *const T).offset(*tmp_offset) * *tmp_kernel
+                    tmp_res += *(cur as *const T).offset(*tmp_offset) * T::from(*tmp_kernel)
                 });
 
                 *p.add(i) = tmp_res;
