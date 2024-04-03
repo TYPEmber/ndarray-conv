@@ -92,21 +92,21 @@ where
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array<T, Dim<[Ix; N]>>> {
-        let kernel = kernel.into_kernel_with_dilation();
+        let kwd = kernel.into_kernel_with_dilation();
 
         // if kernel.dilation.iter == 0 {
         //     return None;
         // }
 
-        let cm = conv_mode.unfold(&kernel);
+        let cm = conv_mode.unfold(&kwd);
         let pds = self.padding(padding_mode, cm.padding);
 
-        let offset_list = kernel.gen_offset_list(pds.strides());
+        let offset_list = kwd.gen_offset_list(pds.strides());
 
         let self_raw_dim = self.raw_dim();
-        let kernel_raw_dim = kernel.kernel.raw_dim();
+        let kernel_raw_dim = kwd.kernel.raw_dim();
         let kernel_raw_dim_with_dilation: [usize; N] = std::array::from_fn(|i| {
-            kernel_raw_dim[i] * kernel.dilation[i] - kernel.dilation[i] + 1
+            kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1
         });
         let output_shape: [usize; N] = std::array::from_fn(|i| {
             (cm.padding[i][0] + cm.padding[i][1] + self_raw_dim[i]
