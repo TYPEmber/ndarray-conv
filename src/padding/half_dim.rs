@@ -1,7 +1,5 @@
-use ndarray::{
-    Array, ArrayBase, Axis, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis, SliceArg,
-    SliceInfo, SliceInfoElem,
-};
+use ndarray::{Array, ArrayBase, Axis, Dim, Ix, OwnedRepr, RemoveAxis};
+use num::traits::NumAssign;
 
 #[inline]
 pub fn constant_front<const N: usize, T>(
@@ -10,10 +8,7 @@ pub fn constant_front<const N: usize, T>(
     padding: [usize; 2],
     constant: T,
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     for j in 0..padding[0] {
@@ -35,10 +30,7 @@ pub fn constant_back<const N: usize, T>(
     padding: [usize; 2],
     constant: T,
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     for j in input_dim[dim] + padding[0]..buffer.raw_dim()[dim] {
@@ -58,10 +50,7 @@ pub fn replicate_front<const N: usize, T>(
     dim: usize,
     padding: [usize; 2],
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     let border = buffer.index_axis(Axis(dim), padding[0]);
@@ -83,10 +72,7 @@ pub fn replicate_back<const N: usize, T>(
     dim: usize,
     padding: [usize; 2],
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     let border = buffer.index_axis(Axis(dim), buffer.raw_dim()[dim] - padding[1] - 1);
@@ -107,10 +93,7 @@ pub fn reflect_front<const N: usize, T>(
     dim: usize,
     padding: [usize; 2],
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     let border_index = padding[0];
@@ -135,10 +118,7 @@ pub fn reflect_back<const N: usize, T>(
     dim: usize,
     padding: [usize; 2],
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     let border_index = buffer.raw_dim()[dim] - padding[1] - 1;
@@ -162,10 +142,7 @@ pub fn circular_front<const N: usize, T>(
     dim: usize,
     padding: [usize; 2],
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     let border_index = padding[0];
@@ -190,10 +167,7 @@ pub fn circular_back<const N: usize, T>(
     dim: usize,
     padding: [usize; 2],
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     let border_index = buffer.raw_dim()[dim] - padding[1] - 1;

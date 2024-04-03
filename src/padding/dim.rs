@@ -1,7 +1,5 @@
-use ndarray::{
-    ArrayBase, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis, SliceArg, SliceInfo,
-    SliceInfoElem,
-};
+use ndarray::{ArrayBase, Dim, Ix, OwnedRepr, RemoveAxis};
+use num::traits::NumAssign;
 
 use super::half_dim;
 
@@ -13,10 +11,7 @@ pub fn constant<const N: usize, T>(
     padding: [usize; 2],
     constant: T,
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     half_dim::constant_front(buffer, dim, padding, constant);
@@ -30,10 +25,7 @@ pub fn replicate<const N: usize, T>(
     dim: usize,
     padding: [usize; 2],
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     half_dim::replicate_front(buffer, dim, padding);
@@ -47,10 +39,7 @@ pub fn reflect<const N: usize, T>(
     dim: usize,
     padding: [usize; 2],
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     half_dim::reflect_front(buffer, dim, padding);
@@ -64,10 +53,7 @@ pub fn circular<const N: usize, T>(
     dim: usize,
     padding: [usize; 2],
 ) where
-    T: num::traits::NumAssign + Copy + Clone,
-    Dim<[Ix; N]>: Dimension,
-    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    T: NumAssign + Copy,
     Dim<[Ix; N]>: RemoveAxis,
 {
     half_dim::circular_front(buffer, dim, padding);

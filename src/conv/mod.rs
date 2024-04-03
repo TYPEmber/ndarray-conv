@@ -25,7 +25,6 @@ impl<const N: usize> ConvMode<N> {
     where
         S: ndarray::RawData,
         Dim<[Ix; N]>: Dimension,
-        // [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     {
         let kernel_dim = kernel.kernel.raw_dim();
         let kernel_dim: [usize; N] = std::array::from_fn(|i|
@@ -82,10 +81,9 @@ where
     TK: NumAssign + Copy + Debug,
     S: Data<Elem = T> + 'a,
     SK: Data<Elem = TK> + 'a,
-    Dim<[Ix; N]>: Dimension,
+    Dim<[Ix; N]>: RemoveAxis,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
-    Dim<[Ix; N]>: RemoveAxis,
     T: From<TK>,
 {
     fn conv(

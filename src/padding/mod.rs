@@ -3,9 +3,10 @@ use std::ops::Add;
 use super::{BorderType, PaddingMode};
 
 use ndarray::{
-    Array, ArrayBase, Data, Dim, Dimension, IntoDimension, Ix, OwnedRepr, RemoveAxis, SliceArg,
-    SliceInfo, SliceInfoElem,
+    Array, ArrayBase, Data, Dim, IntoDimension, Ix, OwnedRepr, RemoveAxis, SliceArg, SliceInfo,
+    SliceInfoElem,
 };
+use num::traits::NumAssign;
 
 mod dim;
 mod half_dim;
@@ -18,9 +19,8 @@ pub trait PaddingExt<const N: usize, T: num::traits::NumAssign + Copy, Output> {
 
 impl<const N: usize, T, S> PaddingExt<N, T, Array<T, Dim<[Ix; N]>>> for ArrayBase<S, Dim<[Ix; N]>>
 where
-    T: num::traits::NumAssign + Copy,
+    T: NumAssign + Copy,
     S: Data<Elem = T>,
-    Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
@@ -48,9 +48,8 @@ fn padding_const<const N: usize, T, S>(
     const_value: T,
 ) -> Array<T, Dim<[Ix; N]>>
 where
-    T: num::traits::NumAssign + Copy + Clone,
+    T: NumAssign + Copy,
     S: Data<Elem = T>,
-    Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
@@ -82,9 +81,8 @@ fn padding_replicate<const N: usize, T, S>(
     explicit_padding: ExplicitPadding<N>,
 ) -> Array<T, Dim<[Ix; N]>>
 where
-    T: num::traits::NumAssign + Copy + Clone,
+    T: NumAssign + Copy,
     S: Data<Elem = T>,
-    Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
@@ -107,9 +105,8 @@ fn padding_reflect<const N: usize, T, S>(
     explicit_padding: ExplicitPadding<N>,
 ) -> Array<T, Dim<[Ix; N]>>
 where
-    T: num::traits::NumAssign + Copy + Clone,
+    T: NumAssign + Copy,
     S: Data<Elem = T>,
-    Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
@@ -132,9 +129,8 @@ fn padding_circular<const N: usize, T, S>(
     explicit_padding: ExplicitPadding<N>,
 ) -> Array<T, Dim<[Ix; N]>>
 where
-    T: num::traits::NumAssign + Copy + Clone,
+    T: NumAssign + Copy,
     S: Data<Elem = T>,
-    Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
@@ -158,9 +154,8 @@ fn padding_custom<const N: usize, T, S>(
     borders: [BorderType<T>; N],
 ) -> Array<T, Dim<[Ix; N]>>
 where
-    T: num::traits::NumAssign + Copy + Clone,
+    T: NumAssign + Copy,
     S: Data<Elem = T>,
-    Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
@@ -203,9 +198,8 @@ fn padding_explicit<const N: usize, T, S>(
     borders: [[BorderType<T>; 2]; N],
 ) -> Array<T, Dim<[Ix; N]>>
 where
-    T: num::traits::NumAssign + Copy + Clone,
+    T: NumAssign + Copy,
     S: Data<Elem = T>,
-    Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
