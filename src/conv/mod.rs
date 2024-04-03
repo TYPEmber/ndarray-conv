@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use ndarray::{
-    Array, ArrayBase, ArrayView, Data, Dim, Dimension, IntoDimension, Ix, RemoveAxis, SliceArg,
-    SliceInfo, SliceInfoElem,
+    Array, ArrayBase, ArrayView, Data, Dim, Dimension, IntoDimension, Ix, RawData, RemoveAxis,
+    SliceArg, SliceInfo, SliceInfoElem,
 };
 use num::traits::NumAssign;
 
@@ -61,14 +61,12 @@ impl<const N: usize> ConvMode<N> {
     }
 }
 
-pub trait ConvExt<
-    'a,
+pub trait ConvExt<'a, T, TK, S, SK, const N: usize>
+where
     T: NumAssign + Copy,
     TK: NumAssign + Copy,
-    S: ndarray::RawData,
-    SK: ndarray::RawData,
-    const N: usize,
->
+    S: RawData,
+    SK: RawData,
 {
     fn conv(
         &self,
@@ -78,16 +76,10 @@ pub trait ConvExt<
     ) -> Option<Array<T, Dim<[Ix; N]>>>;
 }
 
-impl<
-        'a,
-        T: NumAssign + Copy,
-        TK: NumAssign + Copy,
-        S: ndarray::RawData,
-        SK: ndarray::RawData,
-        const N: usize,
-    > ConvExt<'a, T, TK, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
+impl<'a, T, TK, S, SK, const N: usize> ConvExt<'a, T, TK, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
 where
-    T: num::traits::NumAssign + Copy + Debug,
+    T: NumAssign + Copy + Debug,
+    TK: NumAssign + Copy + Debug,
     S: Data<Elem = T> + 'a,
     SK: Data<Elem = TK> + 'a,
     Dim<[Ix; N]>: Dimension,
@@ -103,8 +95,6 @@ where
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array<T, Dim<[Ix; N]>>> {
         let kernel = kernel.into_kernel_with_dilation();
-
-        let a = kernel.kernel;
 
         // if kernel.dilation.iter == 0 {
         //     return None;
