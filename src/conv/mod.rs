@@ -58,20 +58,20 @@ impl<const N: usize> ConvMode<N> {
     }
 }
 
-pub trait ConvExt<T: NumAssign + Copy, S: ndarray::RawData, const N: usize> {
+pub trait ConvExt<'a, T: NumAssign + Copy, S: ndarray::RawData, const N: usize> {
     fn conv(
         &self,
-        kernel: impl IntoKernelWithDilation<S, N>,
+        kernel: impl IntoKernelWithDilation<'a, S, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array<T, Dim<[Ix; N]>>>;
 }
 
-impl<T: NumAssign + Copy, S: ndarray::RawData, const N: usize> ConvExt<T, S, N>
+impl<'a, T: NumAssign + Copy, S: ndarray::RawData, const N: usize> ConvExt<'a, T, S, N>
     for ArrayBase<S, Dim<[Ix; N]>>
 where
     T: num::traits::NumAssign + Copy + Debug,
-    S: Data<Elem = T>,
+    S: Data<Elem = T> + 'a,
     Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
@@ -79,7 +79,7 @@ where
 {
     fn conv(
         &self,
-        kernel: impl IntoKernelWithDilation<S, N>,
+        kernel: impl IntoKernelWithDilation<'a, S, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Option<Array<T, Dim<[Ix; N]>>> {
@@ -178,7 +178,7 @@ mod tests {
 
         let res = arr
             .conv(
-                kernel,
+                &kernel,
                 ConvMode::Custom {
                     padding: [1, 2],
                     strides: [2, 2],
@@ -193,7 +193,7 @@ mod tests {
         let kernel = array![[1, 1], [1, 1]];
 
         let res = arr
-            .conv(kernel, ConvMode::Full, PaddingMode::Zeros)
+            .conv(&kernel, ConvMode::Full, PaddingMode::Zeros)
             .unwrap();
         assert_eq!(res, array![[1, 3, 2], [4, 10, 6], [3, 7, 4]]);
         dbg!(res);
@@ -203,7 +203,7 @@ mod tests {
 
         let res = arr
             .conv(
-                kernel,
+                &kernel,
                 ConvMode::Custom {
                     padding: [4],
                     strides: [2],

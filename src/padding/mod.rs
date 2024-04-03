@@ -315,7 +315,8 @@ mod tests {
     #[test]
     fn padding_custom() {
         let arr = array![[1, 2], [3, 4]];
-        let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]].into_kernel_with_dilation();
+        let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
+        let kernel = kernel.into_kernel_with_dilation();
 
         let explicit_conv = ConvMode::Full.unfold(&kernel);
         let explicit_padding = explicit_conv.padding;

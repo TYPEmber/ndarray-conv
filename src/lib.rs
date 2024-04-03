@@ -1,4 +1,5 @@
 mod conv;
+mod conv_fft;
 mod dilation;
 mod padding;
 

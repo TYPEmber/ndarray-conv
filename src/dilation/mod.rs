@@ -1,11 +1,11 @@
 use ndarray::{ArrayBase, Data, Dim, Dimension, IntoDimension, Ix, RawData};
 
-pub struct KernelWithDilation<S: RawData, const N: usize> {
-    pub kernel: ArrayBase<S, Dim<[Ix; N]>>,
+pub struct KernelWithDilation<'a, S: RawData, const N: usize> {
+    pub kernel: &'a ArrayBase<S, Dim<[Ix; N]>>,
     pub dilation: [usize; N],
 }
 
-impl<S: RawData, const N: usize, T> KernelWithDilation<S, N>
+impl<'a, S: RawData, const N: usize, T> KernelWithDilation<'a, S, N>
 where
     T: num::traits::NumAssign + Copy,
     S: Data<Elem = T>,
@@ -38,8 +38,10 @@ where
     }
 }
 
-impl<S: RawData, const N: usize> From<ArrayBase<S, Dim<[Ix; N]>>> for KernelWithDilation<S, N> {
-    fn from(kernel: ArrayBase<S, Dim<[Ix; N]>>) -> Self {
+impl<'a, S: RawData, const N: usize> From<&'a ArrayBase<S, Dim<[Ix; N]>>>
+    for KernelWithDilation<'a, S, N>
+{
+    fn from(kernel: &'a ArrayBase<S, Dim<[Ix; N]>>) -> Self {
         Self {
             kernel,
             dilation: [1; N],
@@ -66,12 +68,12 @@ impl<const N: usize> IntoDilation<N> for [usize; N] {
 }
 
 pub trait WithDilation<S: RawData, const N: usize> {
-    fn with_dilation(self, dilation: impl IntoDilation<N>) -> KernelWithDilation<S, N>;
+    fn with_dilation(&self, dilation: impl IntoDilation<N>) -> KernelWithDilation<S, N>;
 }
 
 impl<S: RawData, const N: usize> WithDilation<S, N> for ArrayBase<S, Dim<[Ix; N]>> {
     #[inline]
-    fn with_dilation(self, dilation: impl IntoDilation<N>) -> KernelWithDilation<S, N> {
+    fn with_dilation(&self, dilation: impl IntoDilation<N>) -> KernelWithDilation<S, N> {
         KernelWithDilation {
             kernel: self,
             dilation: dilation.into_dilation(),
@@ -79,20 +81,24 @@ impl<S: RawData, const N: usize> WithDilation<S, N> for ArrayBase<S, Dim<[Ix; N]
     }
 }
 
-pub trait IntoKernelWithDilation<S: RawData, const N: usize> {
-    fn into_kernel_with_dilation(self) -> KernelWithDilation<S, N>;
+pub trait IntoKernelWithDilation<'a, S: RawData, const N: usize> {
+    fn into_kernel_with_dilation(self) -> KernelWithDilation<'a, S, N>;
 }
 
-impl<S: RawData, const N: usize> IntoKernelWithDilation<S, N> for ArrayBase<S, Dim<[Ix; N]>> {
+impl<'a, S: RawData, const N: usize> IntoKernelWithDilation<'a, S, N>
+    for &'a ArrayBase<S, Dim<[Ix; N]>>
+{
     #[inline]
-    fn into_kernel_with_dilation(self) -> KernelWithDilation<S, N> {
+    fn into_kernel_with_dilation(self) -> KernelWithDilation<'a, S, N> {
         self.with_dilation(1)
     }
 }
 
-impl<S: RawData, const N: usize> IntoKernelWithDilation<S, N> for KernelWithDilation<S, N> {
+impl<'a, S: RawData, const N: usize> IntoKernelWithDilation<'a, S, N>
+    for KernelWithDilation<'a, S, N>
+{
     #[inline]
-    fn into_kernel_with_dilation(self) -> KernelWithDilation<S, N> {
+    fn into_kernel_with_dilation(self) -> KernelWithDilation<'a, S, N> {
         self
     }
 }
@@ -105,13 +111,15 @@ mod tests {
 
     #[test]
     fn check_trait_impl() {
-        fn conv_example<S: RawData, const N: usize>(kernel: impl IntoKernelWithDilation<S, N>) {
+        fn conv_example<'a, S: RawData + 'a, const N: usize>(
+            kernel: impl IntoKernelWithDilation<'a, S, N>,
+        ) {
             let _ = kernel.into_kernel_with_dilation();
         }
 
         let kernel = array![1, 0, 1];
 
-        conv_example(kernel);
+        conv_example(&kernel);
 
         let kernel = array![1, 0, 1];
 
