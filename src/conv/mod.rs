@@ -102,9 +102,8 @@ where
 
         let self_raw_dim = self.raw_dim();
         let kernel_raw_dim = kwd.kernel.raw_dim();
-        let kernel_raw_dim_with_dilation: [usize; N] = std::array::from_fn(|i| {
-            kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1
-        });
+        let kernel_raw_dim_with_dilation: [usize; N] =
+            std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
         let output_shape: [usize; N] = std::array::from_fn(|i| {
             (cm.padding[i][0] + cm.padding[i][1] + self_raw_dim[i]
                 - kernel_raw_dim_with_dilation[i])
