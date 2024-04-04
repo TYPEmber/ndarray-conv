@@ -60,10 +60,9 @@ impl<const N: usize> ConvMode<N> {
     }
 }
 
-pub trait ConvExt<'a, T, TK, S, SK, const N: usize>
+pub trait ConvExt<'a, T, S, SK, const N: usize>
 where
     T: NumAssign + Copy,
-    TK: NumAssign + Copy,
     S: RawData,
     SK: RawData,
 {
@@ -75,16 +74,14 @@ where
     ) -> Option<Array<T, Dim<[Ix; N]>>>;
 }
 
-impl<'a, T, TK, S, SK, const N: usize> ConvExt<'a, T, TK, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
+impl<'a, T, S, SK, const N: usize> ConvExt<'a, T, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
 where
     T: NumAssign + Copy + Debug,
-    TK: NumAssign + Copy + Debug,
     S: Data<Elem = T> + 'a,
-    SK: Data<Elem = TK> + 'a,
+    SK: Data<Elem = T> + 'a,
     Dim<[Ix; N]>: RemoveAxis,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
-    T: From<TK>,
 {
     fn conv(
         &self,
@@ -138,7 +135,7 @@ where
                 let mut tmp_res = T::zero();
 
                 offset_list.iter().for_each(|(tmp_offset, tmp_kernel)| {
-                    tmp_res += *(cur as *const T).offset(*tmp_offset) * T::from(*tmp_kernel)
+                    tmp_res += *(cur as *const T).offset(*tmp_offset) * *tmp_kernel
                 });
 
                 *p.add(i) = tmp_res;
