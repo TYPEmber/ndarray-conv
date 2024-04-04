@@ -1,67 +1,129 @@
-use std::ops::Add;
-
 use super::{BorderType, PaddingMode};
 
 use ndarray::{
-    Array, ArrayBase, Data, Dim, IntoDimension, Ix, OwnedRepr, RemoveAxis, SliceArg, SliceInfo,
-    SliceInfoElem,
+    Array, ArrayBase, Data, DataMut, Dim, IntoDimension, Ix, RemoveAxis,
+    SliceArg, SliceInfo, SliceInfoElem,
 };
 use num::traits::NumAssign;
 
-mod dim;
+pub(crate) mod dim;
 mod half_dim;
 
 pub type ExplicitPadding<const N: usize> = [[usize; 2]; N];
 
 pub trait PaddingExt<const N: usize, T: num::traits::NumAssign + Copy, Output> {
     fn padding(&self, mode: PaddingMode<N, T>, padding_size: ExplicitPadding<N>) -> Output;
+    fn padding_in<SO: DataMut<Elem = T>, DO: RemoveAxis>(
+        &self,
+        buffer: &mut ArrayBase<SO, DO>,
+        mode: PaddingMode<N, T>,
+        padding_size: ExplicitPadding<N>,
+    ) where
+        T: NumAssign + Copy,
+        SO: DataMut<Elem = T>,
+        [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
+        SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+        Dim<[Ix; N]>: RemoveAxis,
+        DO: RemoveAxis,
+        SliceInfo<[SliceInfoElem; N], DO, DO>: SliceArg<DO>;
 }
 
-impl<const N: usize, T, S> PaddingExt<N, T, Array<T, Dim<[Ix; N]>>> for ArrayBase<S, Dim<[Ix; N]>>
+impl<const N: usize, T, S, D> PaddingExt<N, T, Array<T, Dim<[Ix; N]>>> for ArrayBase<S, D>
 where
     T: NumAssign + Copy,
     S: Data<Elem = T>,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
+    D: RemoveAxis + IntoDimension,
 {
     fn padding(
         &self,
         mode: PaddingMode<N, T>,
         explicit_padding: ExplicitPadding<N>,
     ) -> Array<T, Dim<[Ix; N]>> {
+        let c = match mode {
+            PaddingMode::Const(c) => c,
+            _ => T::zero(),
+        };
+
+        let raw_dim = self.raw_dim();
+
+        let output_dim =
+            std::array::from_fn(|i| raw_dim[i] + explicit_padding[i][0] + explicit_padding[i][1]);
+
+        let mut output: Array<T, Dim<[Ix; N]>> = Array::from_elem(output_dim, c);
+
+        padding_const(self, &mut output, explicit_padding);
+
         match mode {
-            PaddingMode::Zeros => padding_const(self, explicit_padding, T::zero()),
-            PaddingMode::Const(const_value) => padding_const(self, explicit_padding, const_value),
-            PaddingMode::Replicate => padding_replicate(self, explicit_padding),
-            PaddingMode::Reflect => padding_reflect(self, explicit_padding),
-            PaddingMode::Circular => padding_circular(self, explicit_padding),
-            PaddingMode::Custom(borders) => padding_custom(self, explicit_padding, borders),
-            PaddingMode::Explicit(borders) => padding_explicit(self, explicit_padding, borders),
-        }
+            PaddingMode::Replicate => padding_replicate(self, &mut output, explicit_padding),
+            PaddingMode::Reflect => padding_reflect(self, &mut output, explicit_padding),
+            PaddingMode::Circular => padding_circular(self, &mut output, explicit_padding),
+            PaddingMode::Custom(borders) => {
+                padding_custom(self, &mut output, explicit_padding, borders)
+            }
+            PaddingMode::Explicit(borders) => {
+                padding_explicit(self, &mut output, explicit_padding, borders)
+            }
+            _ => {}
+        };
+
+        output
+    }
+
+    fn padding_in<SO, DO>(
+        &self,
+        buffer: &mut ArrayBase<SO, DO>,
+        mode: PaddingMode<N, T>,
+        explicit_padding: ExplicitPadding<N>,
+    ) where
+        T: NumAssign + Copy,
+        S: Data<Elem = T>,
+        SO: DataMut<Elem = T>,
+        [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
+        SliceInfo<[SliceInfoElem; N], DO, DO>: SliceArg<DO>,
+        Dim<[Ix; N]>: RemoveAxis,
+        DO: RemoveAxis,
+    {
+        padding_const(self, buffer, explicit_padding);
+
+        match mode {
+            PaddingMode::Const(c) => {
+                explicit_padding
+                    .iter()
+                    .enumerate()
+                    .for_each(|(dim, &explicit_padding)| {
+                        dim::constant(self.raw_dim(), buffer, dim, explicit_padding, c);
+                    })
+            }
+            PaddingMode::Replicate => padding_replicate(self, buffer, explicit_padding),
+            PaddingMode::Reflect => padding_reflect(self, buffer, explicit_padding),
+            PaddingMode::Circular => padding_circular(self, buffer, explicit_padding),
+            PaddingMode::Custom(borders) => padding_custom(self, buffer, explicit_padding, borders),
+            PaddingMode::Explicit(borders) => {
+                padding_explicit(self, buffer, explicit_padding, borders)
+            }
+            _ => {}
+        };
     }
 }
 
-fn padding_const<const N: usize, T, S>(
-    input: &ArrayBase<S, Dim<[Ix; N]>>,
+pub(crate) fn padding_const<const N: usize, T, S, D, SO, DO>(
+    input: &ArrayBase<S, D>,
+    output: &mut ArrayBase<SO, DO>,
     explicit_padding: ExplicitPadding<N>,
-    const_value: T,
-) -> Array<T, Dim<[Ix; N]>>
-where
+) where
     T: NumAssign + Copy,
     S: Data<Elem = T>,
+    SO: DataMut<Elem = T>,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    // SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
+    SliceInfo<[SliceInfoElem; N], DO, DO>: SliceArg<DO>,
     Dim<[Ix; N]>: RemoveAxis,
+    D: RemoveAxis,
+    DO: RemoveAxis,
 {
-    let output_dim = input.raw_dim().add(
-        explicit_padding
-            .map(|size| size[0] + size[1])
-            .into_dimension(),
-    );
-
-    let mut output: Array<T, Dim<[Ix; N]>> = Array::from_elem(output_dim, const_value);
-
     let mut output_slice = output.slice_mut(unsafe {
         SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
             start: explicit_padding[i][0] as isize,
@@ -72,141 +134,121 @@ where
     });
 
     output_slice.assign(input);
-
-    output
 }
 
-fn padding_replicate<const N: usize, T, S>(
-    input: &ArrayBase<S, Dim<[Ix; N]>>,
+fn padding_replicate<const N: usize, T, S, D, SO, DO>(
+    input: &ArrayBase<S, D>,
+    output: &mut ArrayBase<SO, DO>,
     explicit_padding: ExplicitPadding<N>,
-) -> Array<T, Dim<[Ix; N]>>
-where
+) where
     T: NumAssign + Copy,
     S: Data<Elem = T>,
+    SO: DataMut<Elem = T>,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
+    D: RemoveAxis + IntoDimension,
+    DO: RemoveAxis,
 {
-    let mut output: ArrayBase<OwnedRepr<T>, Dim<[usize; N]>> =
-        padding_const(input, explicit_padding, T::zero());
-
     explicit_padding
         .iter()
         .enumerate()
         .for_each(|(dim, &explicit_padding)| {
-            dim::replicate(input.raw_dim(), &mut output, dim, explicit_padding);
+            dim::replicate(input.raw_dim(), output, dim, explicit_padding);
         });
-
-    output
 }
 
-fn padding_reflect<const N: usize, T, S>(
-    input: &ArrayBase<S, Dim<[Ix; N]>>,
+fn padding_reflect<const N: usize, T, S, D, SO, DO>(
+    input: &ArrayBase<S, D>,
+    output: &mut ArrayBase<SO, DO>,
     explicit_padding: ExplicitPadding<N>,
-) -> Array<T, Dim<[Ix; N]>>
-where
+) where
     T: NumAssign + Copy,
     S: Data<Elem = T>,
+    SO: DataMut<Elem = T>,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
+    D: RemoveAxis,
+    DO: RemoveAxis,
 {
-    let mut output: ArrayBase<OwnedRepr<T>, Dim<[usize; N]>> =
-        padding_const(input, explicit_padding, T::zero());
-
     explicit_padding
         .iter()
         .enumerate()
         .for_each(|(dim, &explicit_padding)| {
-            dim::reflect(input.raw_dim(), &mut output, dim, explicit_padding);
+            dim::reflect(input.raw_dim(), output, dim, explicit_padding);
         });
-
-    output
 }
 
-fn padding_circular<const N: usize, T, S>(
-    input: &ArrayBase<S, Dim<[Ix; N]>>,
+fn padding_circular<const N: usize, T, S, D, SO, DO>(
+    input: &ArrayBase<S, D>,
+    output: &mut ArrayBase<SO, DO>,
     explicit_padding: ExplicitPadding<N>,
-) -> Array<T, Dim<[Ix; N]>>
-where
+) where
     T: NumAssign + Copy,
     S: Data<Elem = T>,
+    SO: DataMut<Elem = T>,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
+    D: RemoveAxis,
+    DO: RemoveAxis,
 {
-    let mut output: ArrayBase<OwnedRepr<T>, Dim<[usize; N]>> =
-        padding_const(input, explicit_padding, T::zero());
-
     explicit_padding
         .iter()
         .enumerate()
         .for_each(|(dim, &explicit_padding)| {
-            dim::circular(input.raw_dim(), &mut output, dim, explicit_padding);
+            dim::circular(input.raw_dim(), output, dim, explicit_padding);
         });
-
-    output
 }
 
-fn padding_custom<const N: usize, T, S>(
-    input: &ArrayBase<S, Dim<[Ix; N]>>,
+fn padding_custom<const N: usize, T, S, D, SO, DO>(
+    input: &ArrayBase<S, D>,
+    output: &mut ArrayBase<SO, DO>,
     explicit_padding: ExplicitPadding<N>,
     borders: [BorderType<T>; N],
-) -> Array<T, Dim<[Ix; N]>>
-where
+) where
     T: NumAssign + Copy,
     S: Data<Elem = T>,
+    SO: DataMut<Elem = T>,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
+    D: RemoveAxis,
+    DO: RemoveAxis,
 {
-    let mut output: ArrayBase<OwnedRepr<T>, Dim<[usize; N]>> =
-        padding_const(input, explicit_padding, T::zero());
-
     explicit_padding
         .iter()
         .zip(borders.iter())
         .enumerate()
         .for_each(|(dim, (&explicit_padding, border))| match border {
-            BorderType::Zeros => dim::constant(
-                input.raw_dim(),
-                &mut output,
-                dim,
-                explicit_padding,
-                T::zero(),
-            ),
+            BorderType::Zeros => {
+                dim::constant(input.raw_dim(), output, dim, explicit_padding, T::zero())
+            }
             BorderType::Const(c) => {
-                dim::constant(input.raw_dim(), &mut output, dim, explicit_padding, *c)
+                dim::constant(input.raw_dim(), output, dim, explicit_padding, *c)
             }
-            BorderType::Reflect => {
-                dim::reflect(input.raw_dim(), &mut output, dim, explicit_padding)
-            }
-            BorderType::Replicate => {
-                dim::replicate(input.raw_dim(), &mut output, dim, explicit_padding)
-            }
-            BorderType::Circular => {
-                dim::circular(input.raw_dim(), &mut output, dim, explicit_padding)
-            }
+            BorderType::Reflect => dim::reflect(input.raw_dim(), output, dim, explicit_padding),
+            BorderType::Replicate => dim::replicate(input.raw_dim(), output, dim, explicit_padding),
+            BorderType::Circular => dim::circular(input.raw_dim(), output, dim, explicit_padding),
         });
-
-    output
 }
 
-fn padding_explicit<const N: usize, T, S>(
-    input: &ArrayBase<S, Dim<[Ix; N]>>,
+fn padding_explicit<const N: usize, T, S, D, SO, DO>(
+    input: &ArrayBase<S, D>,
+    output: &mut ArrayBase<SO, DO>,
     explicit_padding: ExplicitPadding<N>,
     borders: [[BorderType<T>; 2]; N],
-) -> Array<T, Dim<[Ix; N]>>
-where
+) where
     T: NumAssign + Copy,
     S: Data<Elem = T>,
+    SO: DataMut<Elem = T>,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
+    D: RemoveAxis,
+    DO: RemoveAxis,
 {
-    let mut output: ArrayBase<OwnedRepr<T>, Dim<[usize; N]>> =
-        padding_const(input, explicit_padding, T::zero());
-
     explicit_padding
         .iter()
         .zip(borders.iter())
@@ -214,43 +256,35 @@ where
         .for_each(|(dim, (&explicit_padding, border))| {
             match border[0] {
                 BorderType::Zeros => {
-                    half_dim::constant_front(&mut output, dim, explicit_padding, T::zero())
+                    half_dim::constant_front(output, dim, explicit_padding, T::zero())
                 }
-                BorderType::Const(c) => {
-                    half_dim::constant_front(&mut output, dim, explicit_padding, c)
-                }
-                BorderType::Reflect => half_dim::reflect_front(&mut output, dim, explicit_padding),
-                BorderType::Replicate => {
-                    half_dim::replicate_front(&mut output, dim, explicit_padding)
-                }
-                BorderType::Circular => {
-                    half_dim::circular_front(&mut output, dim, explicit_padding)
-                }
+                BorderType::Const(c) => half_dim::constant_front(output, dim, explicit_padding, c),
+                BorderType::Reflect => half_dim::reflect_front(output, dim, explicit_padding),
+                BorderType::Replicate => half_dim::replicate_front(output, dim, explicit_padding),
+                BorderType::Circular => half_dim::circular_front(output, dim, explicit_padding),
             }
             match border[1] {
                 BorderType::Zeros => half_dim::constant_back(
                     input.raw_dim(),
-                    &mut output,
+                    output,
                     dim,
                     explicit_padding,
                     T::zero(),
                 ),
                 BorderType::Const(c) => {
-                    half_dim::constant_back(input.raw_dim(), &mut output, dim, explicit_padding, c)
+                    half_dim::constant_back(input.raw_dim(), output, dim, explicit_padding, c)
                 }
                 BorderType::Reflect => {
-                    half_dim::reflect_back(input.raw_dim(), &mut output, dim, explicit_padding)
+                    half_dim::reflect_back(input.raw_dim(), output, dim, explicit_padding)
                 }
                 BorderType::Replicate => {
-                    half_dim::replicate_back(input.raw_dim(), &mut output, dim, explicit_padding)
+                    half_dim::replicate_back(input.raw_dim(), output, dim, explicit_padding)
                 }
                 BorderType::Circular => {
-                    half_dim::circular_back(input.raw_dim(), &mut output, dim, explicit_padding)
+                    half_dim::circular_back(input.raw_dim(), output, dim, explicit_padding)
                 }
             }
         });
-
-    output
 }
 
 #[cfg(test)]
