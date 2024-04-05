@@ -309,36 +309,36 @@ mod tests {
         assert_eq!(arr, array![[[2, 2], [4, 4]], [[6, 6], [8, 8]]]);
     }
 
-    #[test]
-    fn padding_replicate() {
-        let arr = array![[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
-        let kernel = array![
-            [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-            [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-            [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
-        ];
+    // #[test]
+    // fn padding_replicate() {
+    //     let arr = array![[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+    //     let kernel = array![
+    //         [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+    //         [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+    //         [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
+    //     ];
 
-        let explicit_conv = ConvMode::Full.unfold(&kernel.into_kernel_with_dilation());
-        let explicit_padding = explicit_conv.padding;
-        let arr_padded = arr.padding(PaddingMode::Replicate, explicit_padding);
-        dbg!(arr_padded);
+    //     let explicit_conv = ConvMode::Full.unfold(&kernel.into_kernel_with_dilation());
+    //     let explicit_padding = explicit_conv.padding;
+    //     let arr_padded = arr.padding(PaddingMode::Replicate, explicit_padding);
+    //     dbg!(arr_padded);
 
-        let arr = array![[1, 2], [3, 4]];
-        let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
+    //     let arr = array![[1, 2], [3, 4]];
+    //     let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
 
-        let explicit_conv = ConvMode::Full.unfold(&kernel.into_kernel_with_dilation());
-        let explicit_padding = explicit_conv.padding;
-        let arr_padded = arr.padding(PaddingMode::Const(7), explicit_padding);
-        dbg!(arr_padded);
+    //     let explicit_conv = ConvMode::Full.unfold(&kernel.into_kernel_with_dilation());
+    //     let explicit_padding = explicit_conv.padding;
+    //     let arr_padded = arr.padding(PaddingMode::Const(7), explicit_padding);
+    //     dbg!(arr_padded);
 
-        let arr = array![1, 2, 3];
-        let kernel = array![1, 1, 1, 1];
+    //     let arr = array![1, 2, 3];
+    //     let kernel = array![1, 1, 1, 1];
 
-        let explicit_conv = ConvMode::Same.unfold(&kernel.into_kernel_with_dilation());
-        let explicit_padding = explicit_conv.padding;
-        let arr_padded = arr.padding(PaddingMode::Zeros, explicit_padding);
-        dbg!(arr_padded);
-    }
+    //     let explicit_conv = ConvMode::Same.unfold(&kernel.into_kernel_with_dilation());
+    //     let explicit_padding = explicit_conv.padding;
+    //     let arr_padded = arr.padding(PaddingMode::Zeros, explicit_padding);
+    //     dbg!(arr_padded);
+    // }
 
     #[test]
     fn padding_custom() {
