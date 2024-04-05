@@ -1,29 +1,11 @@
 use std::fmt::Debug;
 
 use ndarray::{
-    s, Array, ArrayBase, ArrayView, Data, Dim, Dimension, IntoDimension, Ix, RawData, RemoveAxis,
-    SliceArg, SliceInfo, SliceInfoElem,
+    Array, ArrayBase, Data, Dim, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem,
 };
 use num::traits::NumAssign;
 
-use crate::{
-    conv::ExplicitConv,
-    dilation::{self, IntoKernelWithDilation, KernelWithDilation},
-    padding::{self, padding_const, PaddingExt},
-    ConvExt, ExplicitPadding, PaddingMode,
-};
-
-// trait TTT<D: Dimension>: SliceArg<D, OutDim = D> {
-//     type OutDim;
-// }
-
-// impl<T, const N: usize> TTT<Dim<[Ix; N]>> for SliceInfo<T, Dim<[Ix; N]>, Dim<[Ix; N]>>
-// where
-//     Dim<[Ix; N]>: RemoveAxis,
-//     SliceInfo<T, Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
-// {
-//     type OutDim = Dim<[Ix; N]>;
-// }
+use crate::{padding::PaddingExt, ExplicitPadding, PaddingMode};
 
 pub fn data<T, S, const N: usize>(
     data: &ArrayBase<S, Dim<[Ix; N]>>,
@@ -36,17 +18,11 @@ where
     S: Data<Elem = T>,
     Dim<[Ix; N]>: RemoveAxis,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
-    // SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
-    // SliceInfo<[SliceInfoElem; N], <SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>,
-    //     Dim<[Ix; N]>> as SliceArg<Dim<[Ix; N]>>>::OutDim, <SliceInfo<[SliceInfoElem; N],
-    //     Dim<[Ix; N]>, Dim<[Ix; N]>> as SliceArg<Dim<[Ix; N]>>>::OutDim>:
-    //     SliceArg<<SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>> as SliceArg<Dim<[Ix; N]>>>::OutDim>,
-    // <SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>> as TTT<Dim<[Ix; N]>>>::OutDim:
-    //     RemoveAxis,
     // the key question is how to prove
     // <SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>> as SliceArg<Dim<[Ix; N]>>>::OutDim
     // is Dim<[Ix; N]>
+    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
+        SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
 {
     let mut buffer: Array<T, Dim<[Ix; N]>> = Array::from_elem(fft_size, T::zero());
 
@@ -65,15 +41,18 @@ where
     buffer
 }
 
-pub fn kernel<'a, T, S, D, const N: usize>(kernel: &'a ArrayBase<S, D>, fft_size: [usize; N])
+pub fn kernel<'a, T, S, D, const N: usize>(
+    kernel: &'a ArrayBase<S, D>,
+    fft_size: [usize; N],
+) -> Array<T, Dim<[Ix; N]>>
 where
     T: NumAssign + Copy + Debug + 'a,
     S: Data<Elem = T>,
     D: RemoveAxis,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
-    // ndarray::iter::Iter<'a, T, D>: std::iter::DoubleEndedIterator<Item = &'a T>,
+    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
+        SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
 {
     let mut buffer: Array<T, Dim<[Ix; N]>> = Array::from_elem(fft_size, T::zero());
 
@@ -89,8 +68,21 @@ where
 
     buffer_slice
         .iter_mut()
-        .zip(kernel.as_slice().unwrap().iter().rev())
+        .zip(
+            kernel
+                .as_slice()
+                .unwrap_or(
+                    Array::from_shape_vec(kernel.raw_dim(), kernel.iter().cloned().collect())
+                        .unwrap()
+                        .as_slice()
+                        .unwrap(),
+                )
+                .iter()
+                .rev(),
+        )
         .for_each(|(b, &k)| *b = k);
+
+    buffer
 }
 
 #[cfg(test)]
@@ -101,7 +93,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn t() {
+    fn data_padding() {
         let arr = array![[1, 2], [3, 4]];
         let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
         let kernel = kernel.into_kernel_with_dilation();
@@ -117,6 +109,44 @@ mod tests {
             [8, 8],
         );
 
-        dbg!(arr_padded);
+        assert_eq!(
+            arr_padded,
+            array![
+                [8, 8, 7, 7, 8, 8, 0, 0],
+                [8, 8, 7, 7, 8, 8, 0, 0],
+                [8, 8, 1, 2, 8, 8, 0, 0],
+                [8, 8, 3, 4, 8, 8, 0, 0],
+                [8, 8, 7, 7, 8, 8, 0, 0],
+                [8, 8, 7, 7, 8, 8, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0]
+            ]
+        );
+    }
+
+    #[test]
+    fn kernel_padding() {
+        let _arr = array![[1, 2], [3, 4]];
+        let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
+        let kernel = kernel.into_kernel_with_dilation();
+
+        let explicit_conv = ConvMode::Full.unfold(&kernel);
+        let _explicit_padding = explicit_conv.padding;
+
+        let kernel_padded = super::kernel(kernel.kernel, [8, 8]);
+
+        assert_eq!(
+            kernel_padded,
+            array![
+                [1, 1, 1, 0, 0, 0, 0, 0],
+                [1, 1, 1, 0, 0, 0, 0, 0],
+                [1, 1, 1, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0]
+            ]
+        );
     }
 }
