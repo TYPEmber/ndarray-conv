@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use ndarray::{
-    Array, ArrayBase, Data, Dim, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem,
+    Array, ArrayBase, Data, Dim, Dimension, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem, StrideShape
 };
 use num::{traits::NumAssign, Float};
 
@@ -39,9 +39,13 @@ where
 
         let mut cm = conv_mode.unfold(&kwd);
 
-        let raw_dim = self.raw_dim();
+        let data_raw_dim = self.raw_dim();
+        let kernel_raw_dim = kwd.kernel.raw_dim();
+        let kernel_raw_dim_with_dilation: [usize; N] =
+            std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
         let fft_size = good_size::compute::<N>(&std::array::from_fn(|i| {
-            raw_dim[i] + cm.padding[i][0] + cm.padding[i][1]
+            (data_raw_dim[i] + cm.padding[i][0] + cm.padding[i][1])
+                .max(kernel_raw_dim_with_dilation[i])
         }));
 
         cm.padding
@@ -51,7 +55,7 @@ where
             .for_each(|((mut pd, fft_size), &raw_dim)| pd[1] += fft_size - raw_dim);
 
         let data_pd = padding::data(self, padding_mode, cm.padding, fft_size);
-        let kernel_pd = padding::kernel(kwd.kernel, fft_size);
+        let kernel_pd = padding::kernel(kwd, fft_size);
 
         todo!()
     }
