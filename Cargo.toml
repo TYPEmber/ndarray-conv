@@ -12,8 +12,8 @@ repository = "https://github.com/TYPEmber/ndarray-conv.git"
 [dependencies]
 ndarray = {version = "0.15", features = ["rayon"]}
 num = "0.4"
-rustfft = "6.1"
-realfft = "3.2"
+rustfft = "6.2"
+realfft = "3.3"
 transpose = "0.2"
 
 # [dev-dependencies]
