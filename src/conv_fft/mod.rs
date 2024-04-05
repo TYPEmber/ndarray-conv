@@ -1,12 +1,11 @@
 use std::fmt::Debug;
 
 use ndarray::{
-    Array, ArrayBase, ArrayView, Data, Dim, DimMax, Dimension, IntoDimension, Ix, RemoveAxis,
-    SliceArg, SliceInfo, SliceInfoElem,
+    Array, ArrayBase, Data, Dim, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem,
 };
 use num::{traits::NumAssign, Float};
 
-use crate::{dilation::IntoKernelWithDilation, padding::PaddingExt, ConvMode, PaddingMode};
+use crate::{dilation::IntoKernelWithDilation, ConvMode, PaddingMode};
 
 mod good_size;
 mod padding;
@@ -25,9 +24,9 @@ impl<'a, T: NumAssign + Copy, S: ndarray::RawData, const N: usize> ConvFFTExt<'a
 where
     T: Float + NumAssign + Debug,
     S: Data<Elem = T> + 'a,
-    Dim<[Ix; N]>: Dimension,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
+    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
+        SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
 {
     fn conv_fft(
