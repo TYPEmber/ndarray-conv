@@ -1,10 +1,10 @@
 [package]
 name = "ndarray-conv"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-keywords = ["conv_2d", "ndarray", "convolution"]
-description = "A blazing fast convolution lib for ndarray."
+keywords = ["convolution", "ndarray", "FFT"]
+description = "N-Dimension convolution (with FFT) lib for ndarray."
 repository = "https://github.com/TYPEmber/ndarray-conv.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
