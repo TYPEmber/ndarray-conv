@@ -2,7 +2,7 @@ use ndarray_conv::{ConvMode, PaddingMode};
 
 fn main() {
     use ndarray::prelude::*;
-    use ndarray_conv::ConvExt;
+    use ndarray_conv::{ConvExt, ConvFFTExt};
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
     use std::time::Instant;
@@ -11,12 +11,12 @@ fn main() {
     let test_cycles_small = 10000;
     // small input images
     for _ in 0..test_cycles_small {
-        let x = Array::random((70, 70), Uniform::new(0f32, 1.));
-        let k = Array::random((3, 3), Uniform::new(0f32, 1.));
+        let x = Array::random(20000, Uniform::new(0f32, 1.));
+        let k = Array::random(200, Uniform::new(0f32, 1.));
 
         let now = Instant::now();
         // x.conv(&k, ConvMode::Same, PaddingMode::Zeros);
-        x.view().conv(&k, ConvMode::Same, PaddingMode::Zeros);
+        x.conv_fft(&k, ConvMode::Full, PaddingMode::Zeros);
 
         // naive_conv::conv_2d(&x, &k);
         // x.conv_2d_fft(

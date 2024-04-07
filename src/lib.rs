@@ -4,6 +4,7 @@ mod dilation;
 mod padding;
 
 pub use conv::ConvExt;
+pub use conv_fft::ConvFFTExt;
 pub use padding::ExplicitPadding;
 
 #[derive(Debug, Clone, Copy)]
