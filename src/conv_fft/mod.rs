@@ -63,6 +63,15 @@ where
 
         let output = fft.backward(data_pd_fft);
 
+        let output = output.slice_move(unsafe {
+            SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
+                start: kernel_raw_dim_with_dilation[i] as isize - 1,
+                end: None,
+                step: cm.strides[i] as isize,
+            }))
+            .unwrap()
+        });
+
         Some(output)
     }
 }
@@ -86,68 +95,75 @@ mod tests {
         let res_normal = arr
             .conv(&kernel, ConvMode::Same, PaddingMode::Zeros)
             .unwrap();
-
-        dbg!(res_normal);
+        // dbg!(res_normal);
 
         let res_fft = arr
             .map(|&x| x as f32)
             .conv_fft(
                 &kernel.map(|&x| x as f32),
-                ConvMode::Full,
+                ConvMode::Same,
                 PaddingMode::Zeros,
             )
             .unwrap()
             .map(|x| x.round() as i32);
-        dbg!(res_fft);
+        // dbg!(res_fft);
+
+        assert_eq!(res_normal, res_fft);
+
+        //
 
         let arr = array![[1, 2], [3, 4]];
-        let kernel = array![[1, 1], [1, 1]];
-
-        let res_normal = arr
-            .conv(kernel.with_dilation(2), ConvMode::Full, PaddingMode::Zeros)
-            .unwrap();
-        dbg!(res_normal);
-
-        let res_fft = arr
-            .map(|&x| x as f32)
-            .conv_fft(
-                kernel.map(|&x| x as f32).with_dilation(2),
-                ConvMode::Full,
-                PaddingMode::Zeros,
-            )
-            .unwrap()
-            .map(|x| x.round() as i32);
-        dbg!(res_fft);
-
-        // assert_eq!(res_normal, res_fft);
-
-        let arr = array![1, 2, 3, 4, 5, 6];
-        let kernel = array![1, 1, 1];
+        let kernel = array![[1, 0], [3, 1]];
 
         let res_normal = arr
             .conv(
                 kernel.with_dilation(2),
                 ConvMode::Custom {
-                    padding: [4],
-                    strides: [1],
+                    padding: [3, 3],
+                    strides: [2, 2],
                 },
-                PaddingMode::Zeros,
+                PaddingMode::Replicate,
             )
             .unwrap();
-        dbg!(&res_normal);
+        // dbg!(res_normal);
+
+        let res_fft = arr
+            .map(|&x| x as f64)
+            .conv_fft(
+                kernel.map(|&x| x as f64).with_dilation(2),
+                ConvMode::Custom {
+                    padding: [3, 3],
+                    strides: [2, 2],
+                },
+                PaddingMode::Replicate,
+            )
+            .unwrap()
+            .map(|x| x.round() as i32);
+        // dbg!(res_fft);
+
+        assert_eq!(res_normal, res_fft);
+
+        //
+
+        let arr = array![1, 2, 3, 4, 5, 6];
+        let kernel = array![1, 1, 1, 1];
+
+        let res_normal = arr
+            .conv(kernel.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
+            .unwrap();
+        // dbg!(&res_normal);
 
         let res_fft = arr
             .map(|&x| x as f32)
             .conv_fft(
                 kernel.map(|&x| x as f32).with_dilation(2),
-                ConvMode::Custom {
-                    padding: [7],
-                    strides: [1],
-                },
+                ConvMode::Same,
                 PaddingMode::Zeros,
             )
             .unwrap()
             .map(|x| x.round() as i32);
-        dbg!(res_fft);
+        // dbg!(res_fft);
+
+        assert_eq!(res_normal, res_fft);
     }
 }
