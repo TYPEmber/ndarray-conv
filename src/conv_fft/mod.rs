@@ -55,14 +55,13 @@ where
 
         let mut fft = fft::Processor::default();
 
-        let data_pd_fft = fft.forward(&mut data_pd);
+        let mut data_pd_fft = fft.forward(&mut data_pd);
         let kernel_pd_fft = fft.forward(&mut kernel_pd);
 
-        let mul_spec = data_pd_fft.mul(kernel_pd_fft);
-
-        use std::ops::Mul;
-
-        let output = fft.backward(mul_spec);
+        data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
+        // let mul_spec = data_pd_fft * kernel_pd_fft;
+        
+        let output = fft.backward(data_pd_fft);
 
         Some(output)
     }
