@@ -16,7 +16,7 @@ impl<T: FftNum> Default for Processor<T> {
         Self {
             rp: Default::default(),
             rp_origin_len: Default::default(),
-            cp: rustfft::FftPlanner::new()
+            cp: rustfft::FftPlanner::new(),
         }
     }
 }
