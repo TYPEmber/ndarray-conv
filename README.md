@@ -1,6 +1,6 @@
 # ndarray-conv
 
-ndarray-conv is a crate that provides a fast convolutions library in pure Rust.
+ndarray-conv is a crate that provides a N-Dimension convolutions (with FFT acceleration) library in pure Rust.
 
 Inspired by
 
@@ -10,49 +10,52 @@ convolutions-rs (https://github.com/Conzel/convolutions-rs#readme)
 
 pocketfft (https://github.com/mreineck/pocketfft)
 
-ndarray-conv is still under heavily developing, the first stage aims to provide a fast conv_2d func for ndarray::Array2<T>.
+## Roadmap
 
-## First Stage
-
-- [x] basic conv_2d
-- [x] use fft to accelerate big kernel's conv_2d computation
-- [x] impl padding_size and padding_mode
-  - [x] PaddingSize: Full Same Valid Custom Explicit
-  - [x] PaddingMode: Zeros Const Reflect Replicate Circular Custom Explicit
-- [ ] strides for kernel and data
+- [x] basic conv for N dimension `Array`/`ArrayView`
+- [x] conv with FFT acceleration for N dimension `Array`/`ArrayView`
+- [x] impl `ConvMode` and `PaddingMode`
+  - [x] `ConvMode`: Full Same Valid Custom Explicit
+  - [x] `PaddingMode`: Zeros Const Reflect Replicate Circular Custom Explicit
+- [x] conv with strides
+- [x] kernel with dilation
+- [ ] handle input size error
 - [ ] explict error type
-
-## Roughly Bench
-
-**conv_2d**
-
-2x-4x faster than ndarray-vision and 4x-10x faster than convolutions-rs.
-2x slower than opencv with small kernel (size < 11)
-
-
-**conv_2d_fft**
-
-10x~ faster than ndarray-vision and convolutions-rs
-
-as fast as opencv on large data and kernel (2000, 5000) * (21, 41)
-
-2x faster than opencv on much larger data and kernel
-
+- [ ] bench with similar libs
 
 ## Example
 
 ```rust
-    use ndarray_conv::*;
-     x.conv_2d(
-        &k,
-        PaddingSize::Full,
-        PaddingMode::Circular,
-    );
-     x.conv_2d_fft(
-        &k,
-        PaddingSize::Same,
-        PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
-    );
+use ndarray_conv::*;
+
+x_nd.conv(
+    &k_n,
+    PaddingSize::Full,
+    PaddingMode::Circular,
+);
+
+x_1d.conv_fft(
+    &k_1d,
+    ConvMode::Same,
+    PaddingMode::Explicit([[BorderType::Replicate, BorderType::Reflect]]),
+);
+
+x_2d.conv_fft(
+    k_2d.with_dilation(2),
+    PaddingSize::Same,
+    PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
+);
+
+// avoid loss of accuracy for fft ver
+// convert Integer to Float before caculate.
+x_3d.map(|&x| x as f32)
+    .conv_fft(
+        &kernel.map(|&x| x as f32),
+        ConvMode::Same,
+        PaddingMode::Zeros,
+    )
+    .unwrap()
+    .map(|x| x.round() as i32);
 ```
 
 ```rust
@@ -71,10 +74,10 @@ fn main() {
         let k = Array::random((9, 9), Uniform::new(0., 1.));
 
         let now = Instant::now();
-        // or use x.conv_2d_fft() for large input data
-        x.conv_2d(
+        // or use x.conv_fft() for large input data
+        x.conv(
             &k,
-            PaddingSize::Same,
+            ConvMode::Same,
             PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
         );
         small_duration += now.elapsed().as_nanos();
