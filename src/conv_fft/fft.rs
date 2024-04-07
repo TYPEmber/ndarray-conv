@@ -100,6 +100,8 @@ impl<T: FftNum> Processor<T> {
             if input.len().is_odd() {
                 unsafe { input.uget_mut(0).im = T::zero() };
                 unsafe { input.uget_mut(input.len() - 1).im = T::zero() }
+            } else {
+                unsafe { input.uget_mut(0).im = T::zero() };
             };
 
             rp.process(
@@ -117,7 +119,8 @@ impl<T: FftNum> Processor<T> {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{array, Axis, Dimension, IntoDimension};
+    use ndarray::{array, s, Axis, Dimension, IntoDimension};
+    use num::Zero;
 
     use crate::{conv_fft, ConvMode, PaddingMode};
 
