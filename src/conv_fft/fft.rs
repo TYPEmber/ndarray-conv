@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use ndarray::{Array, ArrayBase, DataMut, Dim, IntoDimension, Ix, RemoveAxis};
 use num::{Complex, Integer};
 use rustfft::FftNum;

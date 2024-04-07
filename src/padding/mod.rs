@@ -20,11 +20,9 @@ pub trait PaddingExt<const N: usize, T: num::traits::NumAssign + Copy, Output> {
         padding_size: ExplicitPadding<N>,
     ) where
         T: NumAssign + Copy,
-        SO: DataMut<Elem = T>,
         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
         SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>>,
         Dim<[Ix; N]>: RemoveAxis,
-        DO: RemoveAxis,
         SliceInfo<[SliceInfoElem; N], DO, DO>: SliceArg<DO>;
 }
 

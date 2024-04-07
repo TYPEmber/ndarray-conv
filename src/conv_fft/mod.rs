@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use ndarray::{
     Array, ArrayBase, Data, Dim, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem,
 };
-use num::{traits::NumAssign, Float};
+use num::traits::NumAssign;
 use rustfft::FftNum;
 
 use crate::{dilation::IntoKernelWithDilation, ConvMode, PaddingMode};
@@ -60,7 +60,7 @@ where
 
         data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
         // let mul_spec = data_pd_fft * kernel_pd_fft;
-        
+
         let output = fft.backward(data_pd_fft);
 
         Some(output)
