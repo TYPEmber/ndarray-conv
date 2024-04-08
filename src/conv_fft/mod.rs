@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
 use ndarray::{
-    Array, ArrayBase, Data, Dim, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem,
+    Array, ArrayBase, Data, Dim, IntoDimension, Ix, RawData, RemoveAxis, SliceArg,
+    SliceInfo, SliceInfoElem,
 };
 use num::traits::NumAssign;
 use rustfft::FftNum;
@@ -12,20 +13,25 @@ mod fft;
 mod good_size;
 mod padding;
 
-pub trait ConvFFTExt<'a, T: FftNum + NumAssign, S: ndarray::RawData, const N: usize> {
+pub trait ConvFFTExt<'a, T, S, SK, const N: usize>
+where
+    T: FftNum + NumAssign,
+    S: RawData,
+    SK: RawData,
+{
     fn conv_fft(
         &self,
-        kernel: impl IntoKernelWithDilation<'a, S, N>,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>;
 }
 
-impl<'a, T: NumAssign + Copy, S: ndarray::RawData, const N: usize> ConvFFTExt<'a, T, S, N>
-    for ArrayBase<S, Dim<[Ix; N]>>
+impl<'a, T, S, SK, const N: usize> ConvFFTExt<'a, T, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
 where
     T: NumAssign + Debug + FftNum,
     S: Data<Elem = T> + 'a,
+    SK: Data<Elem = T> + 'a,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
         SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
@@ -33,7 +39,7 @@ where
 {
     fn conv_fft(
         &self,
-        kernel: impl IntoKernelWithDilation<'a, S, N>,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>> {
