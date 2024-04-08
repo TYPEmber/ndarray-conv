@@ -1,7 +1,4 @@
-use ndarray::{
-    parallel::prelude::IntoParallelRefIterator, Array, ArrayBase, DataMut, Dim, IntoDimension, Ix,
-    RemoveAxis,
-};
+use ndarray::{Array, ArrayBase, DataMut, Dim, IntoDimension, Ix, RemoveAxis};
 use num::{Complex, Integer};
 use rustfft::FftNum;
 
