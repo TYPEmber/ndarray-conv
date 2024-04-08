@@ -6,22 +6,34 @@ fn main() {
     use std::time::Instant;
 
     let mut small_duration = 0u128;
-    let test_cycles_small = 1000;
+    let test_cycles_small = 10;
     // small input images
     for i in 0..100 {
         for _ in 0..test_cycles_small {
-            // let x = Array::random((70 + i, 70 + i), Uniform::new(0f32, 1.));
-            // let k = Array::random((20, 21), Uniform::new(0f32, 1.));
-            let x = Array::random(20000 + i, Uniform::new(0f32, 1.));
-            let k = Array::random(200, Uniform::new(0f32, 1.));
+            let x = Array::random((1300 + i, 4000 + i), Uniform::new(0f32, 1.));
+            let k = Array::random((21, 41), Uniform::new(0f32, 1.));
+            // let x = Array::random(20000 + i, Uniform::new(0f32, 1.));
+            // let k = Array::random(200, Uniform::new(0f32, 1.));
 
             let now = Instant::now();
             // x.conv(&k, ConvMode::Same, PaddingMode::Zeros);
             x.conv_fft(
-                k.view().with_dilation(2),
+                &k.view(),
                 ConvMode::Full,
                 PaddingMode::Zeros,
             ).unwrap();
+
+            // let mut x = x.permuted_axes([1,0]);
+            // let mut buffer = Array::uninit(x.raw_dim());
+            // buffer.zip_mut_with(&x, |transpose, &origin| {
+            //     transpose.write(origin);
+            // });
+            // x = unsafe { buffer.assume_init() };
+
+            // let _ =Array::from_shape_vec(
+            //     x.raw_dim(),
+            //     x.permuted_axes([1,0]).iter().copied().collect(),
+            // );
 
             // naive_conv::conv_2d(&x, &k);
             // x.conv_2d_fft(
