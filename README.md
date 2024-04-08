@@ -23,7 +23,7 @@ pocketfft (https://github.com/mreineck/pocketfft)
 - [ ] explict error type
 - [ ] bench with similar libs
 
-## Example
+## Examples
 
 ```rust
 use ndarray_conv::*;
@@ -90,3 +90,8 @@ fn main() {
     );
 }
 ```
+## Versions
+- 0.3.2 - Improve performance, by modifying `good_fft_size` and `transpose`.
+- 0.3.1 - Impl basic error type. Fix some bugs.
+- 0.3.0 - update to N-Dimension convolution.
+- 0.2.0 - finished `conv_2d` & `conv_2d_fft`.
