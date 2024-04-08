@@ -14,7 +14,7 @@ ndarray = {version = "0.15", features = ["rayon"]}
 num = "0.4"
 rustfft = "6.2"
 realfft = "3.3"
-transpose = "0.2"
+thiserror = "1.0"
 
 # [dev-dependencies]
 ndarray-rand = "0.14"

@@ -71,7 +71,7 @@ where
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
-    ) -> Option<Array<T, Dim<[Ix; N]>>>;
+    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>;
 }
 
 impl<'a, T, S, SK, const N: usize> ConvExt<'a, T, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
@@ -81,29 +81,43 @@ where
     SK: Data<Elem = T> + 'a,
     Dim<[Ix; N]>: RemoveAxis,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
-    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>: SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
+    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
+        SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
 {
     fn conv(
         &self,
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
-    ) -> Option<Array<T, Dim<[Ix; N]>>> {
+    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>> {
         let kwd = kernel.into_kernel_with_dilation();
 
-        // if kernel.dilation.iter == 0 {
-        //     return None;
-        // }
+        let self_raw_dim = self.raw_dim();
+        if self.shape().iter().product::<usize>() == 0 {
+            return Err(crate::Error::DataShape(self_raw_dim));
+        }
+
+        let kernel_raw_dim = kwd.kernel.raw_dim();
+        if kwd.kernel.shape().iter().product::<usize>() == 0 {
+            return Err(crate::Error::DataShape(kernel_raw_dim));
+        }
+
+        let kernel_raw_dim_with_dilation: [usize; N] =
+            std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
 
         let cm = conv_mode.unfold(&kwd);
         let pds = self.padding(padding_mode, cm.padding);
 
+        let pds_raw_dim = pds.raw_dim();
+        if !(0..N).all(|i| kernel_raw_dim_with_dilation[i] <= pds_raw_dim[i]) {
+            return Err(crate::Error::MismatchShape(
+                conv_mode,
+                kernel_raw_dim_with_dilation,
+            ));
+        }
+
         let offset_list = kwd.gen_offset_list(pds.strides());
 
-        let self_raw_dim = self.raw_dim();
-        let kernel_raw_dim = kwd.kernel.raw_dim();
-        let kernel_raw_dim_with_dilation: [usize; N] =
-            std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
         let output_shape: [usize; N] = std::array::from_fn(|i| {
             (cm.padding[i][0] + cm.padding[i][1] + self_raw_dim[i]
                 - kernel_raw_dim_with_dilation[i])
@@ -141,6 +155,6 @@ where
             });
         }
 
-        Some(ret)
+        Ok(ret)
     }
 }

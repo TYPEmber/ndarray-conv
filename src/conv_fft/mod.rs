@@ -18,7 +18,7 @@ pub trait ConvFFTExt<'a, T: FftNum + NumAssign, S: ndarray::RawData, const N: us
         kernel: impl IntoKernelWithDilation<'a, S, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
-    ) -> Option<Array<T, Dim<[Ix; N]>>>;
+    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>;
 }
 
 impl<'a, T: NumAssign + Copy, S: ndarray::RawData, const N: usize> ConvFFTExt<'a, T, S, N>
@@ -36,18 +36,35 @@ where
         kernel: impl IntoKernelWithDilation<'a, S, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
-    ) -> Option<Array<T, Dim<[Ix; N]>>> {
+    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>> {
         let kwd = kernel.into_kernel_with_dilation();
+
+        let data_raw_dim = self.raw_dim();
+        if self.shape().iter().product::<usize>() == 0 {
+            return Err(crate::Error::DataShape(data_raw_dim));
+        }
+
+        let kernel_raw_dim = kwd.kernel.raw_dim();
+        if kwd.kernel.shape().iter().product::<usize>() == 0 {
+            return Err(crate::Error::DataShape(kernel_raw_dim));
+        }
+
+        let kernel_raw_dim_with_dilation: [usize; N] =
+            std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
 
         let cm = conv_mode.unfold(&kwd);
 
-        let data_raw_dim = self.raw_dim();
-        let kernel_raw_dim = kwd.kernel.raw_dim();
-        let kernel_raw_dim_with_dilation: [usize; N] =
-            std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
+        let pds_raw_dim: [usize; N] =
+            std::array::from_fn(|i| (data_raw_dim[i] + cm.padding[i][0] + cm.padding[i][1]));
+        if !(0..N).all(|i| kernel_raw_dim_with_dilation[i] <= pds_raw_dim[i]) {
+            return Err(crate::Error::MismatchShape(
+                conv_mode,
+                kernel_raw_dim_with_dilation,
+            ));
+        }
+
         let fft_size = good_size::compute::<N>(&std::array::from_fn(|i| {
-            (data_raw_dim[i] + cm.padding[i][0] + cm.padding[i][1])
-                .max(kernel_raw_dim_with_dilation[i])
+            pds_raw_dim[i].max(kernel_raw_dim_with_dilation[i])
         }));
 
         let mut data_pd = padding::data(self, padding_mode, cm.padding, fft_size);
@@ -72,7 +89,7 @@ where
             .unwrap()
         });
 
-        Some(output)
+        Ok(output)
     }
 }
 
@@ -91,8 +108,6 @@ mod tests {
             [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
             [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
         ];
-
-
 
         let res_normal = arr
             .conv(&kernel, ConvMode::Same, PaddingMode::Zeros)

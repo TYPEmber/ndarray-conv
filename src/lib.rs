@@ -45,3 +45,15 @@ pub enum BorderType<T: num::traits::NumAssign + Copy> {
     Replicate,
     Circular,
 }
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum Error<const N: usize> {
+    #[error("Data shape shouldn't have ZERO. {0:?}")]
+    DataShape(ndarray::Dim<[ndarray::Ix; N]>),
+    #[error("Kernel shape shouldn't have ZERO. {0:?}")]
+    KernelShape(ndarray::Dim<[ndarray::Ix; N]>),
+    #[error("ConvMode {0:?} does not match KernelWithDilation Size {1:?}")]
+    MismatchShape(ConvMode<N>, [ndarray::Ix; N]),
+}
