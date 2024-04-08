@@ -3,9 +3,10 @@ mod conv_fft;
 mod dilation;
 mod padding;
 
+pub(crate) use padding::ExplicitPadding;
+
 pub use conv::ConvExt;
 pub use conv_fft::ConvFFTExt;
-pub use padding::ExplicitPadding;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ConvMode<const N: usize> {
