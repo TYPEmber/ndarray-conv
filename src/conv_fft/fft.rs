@@ -100,9 +100,10 @@ impl<T: FftNum> Processor<T> {
             if input.len().is_odd() {
                 unsafe { input.uget_mut(0).im = T::zero() };
                 unsafe { input.uget_mut(input.len() - 1).im = T::zero() }
-            } else {
-                unsafe { input.uget_mut(0).im = T::zero() };
-            };
+            }
+            // else {
+            //     unsafe { input.uget_mut(0).im = T::zero() };
+            // };
 
             rp.process(
                 input.as_slice_mut().unwrap(),
