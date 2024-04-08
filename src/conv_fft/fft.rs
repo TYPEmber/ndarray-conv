@@ -5,9 +5,6 @@ use rustfft::FftNum;
 pub struct Processor<T: FftNum> {
     rp: realfft::RealFftPlanner<T>,
     rp_origin_len: usize,
-    // N dims - 1
-    // unstable feature needed
-    // cps: [rustfft::FftPlanner<T>; N - 1],
     cp: rustfft::FftPlanner<T>,
 }
 
