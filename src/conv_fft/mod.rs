@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use ndarray::{
-    Array, ArrayBase, Data, Dim, IntoDimension, Ix, RawData, RemoveAxis, SliceArg,
-    SliceInfo, SliceInfoElem,
+    Array, ArrayBase, Data, Dim, IntoDimension, Ix, RawData, RemoveAxis, SliceArg, SliceInfo,
+    SliceInfoElem,
 };
 use num::traits::NumAssign;
 use rustfft::FftNum;
@@ -106,6 +106,30 @@ mod tests {
     use crate::{dilation::WithDilation, ConvExt};
 
     use super::*;
+
+    #[test]
+    fn correct_size() {
+        let arr = array![[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]];
+        let kernel = array![[1, 0], [3, 1]];
+
+        let res_normal = arr
+            .conv(&kernel, ConvMode::Same, PaddingMode::Replicate)
+            .unwrap();
+        // dbg!(res_normal);
+
+        let res_fft = arr
+            .map(|&x| x as f64)
+            .conv_fft(
+                &kernel.map(|&x| x as f64),
+                ConvMode::Same,
+                PaddingMode::Replicate,
+            )
+            .unwrap()
+            .map(|x| x.round() as i32);
+        // dbg!(res_fft);
+
+        assert_eq!(res_normal, res_fft);
+    }
 
     #[test]
     fn conv_fft() {
