@@ -19,7 +19,7 @@ pocketfft (https://github.com/mreineck/pocketfft)
   - [x] `PaddingMode`: Zeros Const Reflect Replicate Circular Custom Explicit
 - [x] conv with strides
 - [x] kernel with dilation
-- [ ] handle input size error
+- [x] handle input size error
 - [ ] explict error type
 - [ ] bench with similar libs
 
@@ -34,7 +34,7 @@ x_nd.conv(
     PaddingMode::Circular,
 );
 
-x_1d.conv_fft(
+x_1d.view().conv_fft(
     &k_1d,
     ConvMode::Same,
     PaddingMode::Explicit([[BorderType::Replicate, BorderType::Reflect]]),

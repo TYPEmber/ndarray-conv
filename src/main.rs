@@ -1,8 +1,6 @@
-use ndarray_conv::{ConvMode, PaddingMode};
-
 fn main() {
     use ndarray::prelude::*;
-    use ndarray_conv::{ConvExt, ConvFFTExt};
+    use ndarray_conv::*;
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
     use std::time::Instant;
@@ -16,7 +14,7 @@ fn main() {
 
         let now = Instant::now();
         // x.conv(&k, ConvMode::Same, PaddingMode::Zeros);
-        x.conv_fft(&k, ConvMode::Full, PaddingMode::Zeros);
+        x.conv_fft(k.view().with_dilation(2), ConvMode::Full, PaddingMode::Zeros);
 
         // naive_conv::conv_2d(&x, &k);
         // x.conv_2d_fft(
