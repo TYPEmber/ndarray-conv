@@ -91,6 +91,7 @@ fn main() {
 }
 ```
 ## Versions
+- 0.3.3 - Bug fix: correct conv_fft's output shape.
 - 0.3.2 - Improve performance, by modifying `good_fft_size` and `transpose`.
 - 0.3.1 - Impl basic error type. Fix some bugs.
 - 0.3.0 - update to N-Dimension convolution.

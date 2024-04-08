@@ -1,3 +1,5 @@
+use num::complex::ComplexFloat;
+
 fn main() {
     use ndarray::prelude::*;
     use ndarray_conv::*;
@@ -10,18 +12,27 @@ fn main() {
     // small input images
     for i in 0..100 {
         for _ in 0..test_cycles_small {
-            let x = Array::random((1300 + i, 4000 + i), Uniform::new(0f32, 1.));
-            let k = Array::random((21, 41), Uniform::new(0f32, 1.));
+            let x = Array::random((1007 + i, 4007 + i), Uniform::new(0f32, 1.));
+            let k = Array::random((27, 21), Uniform::new(0f32, 1.));
             // let x = Array::random(20000 + i, Uniform::new(0f32, 1.));
             // let k = Array::random(200, Uniform::new(0f32, 1.));
 
             let now = Instant::now();
-            // x.conv(&k, ConvMode::Same, PaddingMode::Zeros);
-            x.conv_fft(
-                &k.view(),
-                ConvMode::Full,
+            let a = x.conv(k.with_dilation(2), ConvMode::Same, PaddingMode::Zeros).unwrap();
+            let b = x.conv_fft(
+                k.with_dilation(2),
+                ConvMode::Same,
                 PaddingMode::Zeros,
             ).unwrap();
+
+            // dbg!(a.shape(), b.shape());
+
+            // dbg!(&a, &b);
+
+            let d = a - b;
+            assert!(d.iter().all(|&v| v.abs() < 1e-3));
+
+            // dbg!(d);
 
             // let mut x = x.permuted_axes([1,0]);
             // let mut buffer = Array::uninit(x.raw_dim());
