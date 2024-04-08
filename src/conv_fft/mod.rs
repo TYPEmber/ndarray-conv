@@ -89,7 +89,7 @@ where
         let output = output.slice_move(unsafe {
             SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
                 start: kernel_raw_dim_with_dilation[i] as isize - 1,
-                end: None,
+                end: Some((pds_raw_dim[i]) as isize),
                 step: cm.strides[i] as isize,
             }))
             .unwrap()
