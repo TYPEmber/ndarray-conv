@@ -25,19 +25,6 @@ fn good_size_cc(n: usize) -> usize {
     best_fac
 }
 
-fn good_size_rr(n: usize) -> usize {
-    let res = n % 2;
-    let n = n / 2;
-
-    (good_size_cc(n)) * 2 + res
-}
-
 pub fn compute<const N: usize>(size: &[usize; N]) -> [usize; N] {
-    std::array::from_fn(|i| {
-        if i == N - 1 {
-            good_size_rr(size[i])
-        } else {
-            good_size_cc(size[i])
-        }
-    })
+    std::array::from_fn(|i| good_size_cc(size[i]))
 }
