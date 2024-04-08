@@ -1,4 +1,7 @@
-use ndarray::{Array, ArrayBase, DataMut, Dim, IntoDimension, Ix, RemoveAxis};
+use ndarray::{
+    parallel::prelude::IntoParallelRefIterator, Array, ArrayBase, DataMut, Dim, IntoDimension, Ix,
+    RemoveAxis,
+};
 use num::{Complex, Integer};
 use rustfft::FftNum;
 
@@ -51,14 +54,22 @@ impl<T: FftNum> Processor<T> {
         axes.rotate_right(1);
         for _ in 0..N - 1 {
             output_shape.rotate_right(1);
-            output = Array::from_shape_vec(
-                output_shape.into_dimension(),
-                output.permuted_axes(axes).iter().copied().collect(),
-            )
-            .unwrap();
+
+            // transpose takes a lot of time
+            // this method is very slow
+            // input = Array::from_shape_vec(
+            //     raw_dim.into_dimension(),
+            //     input.permuted_axes(axes).iter().copied().collect(),
+            // )
+            // .unwrap();
+
+            let mut buffer = Array::uninit(output_shape.into_dimension());
+            buffer.zip_mut_with(&output.permuted_axes(axes), |transpose, &origin| {
+                transpose.write(origin);
+            });
+            output = unsafe { buffer.assume_init() };
 
             let cp = self.cp.plan_fft_forward(output_shape[N - 1]);
-
             cp.process(output.as_slice_mut().unwrap());
         }
 
@@ -85,11 +96,12 @@ impl<T: FftNum> Processor<T> {
             cp.process(input.as_slice_mut().unwrap());
 
             raw_dim.rotate_left(1);
-            input = Array::from_shape_vec(
-                raw_dim.into_dimension(),
-                input.permuted_axes(axes).iter().copied().collect(),
-            )
-            .unwrap();
+
+            let mut buffer = Array::uninit(raw_dim.into_dimension());
+            buffer.zip_mut_with(&input.permuted_axes(axes), |transpose, &origin| {
+                transpose.write(origin);
+            });
+            input = unsafe { buffer.assume_init() };
         }
 
         let mut output_shape = input.raw_dim();
