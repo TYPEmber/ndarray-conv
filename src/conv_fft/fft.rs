@@ -1,5 +1,5 @@
 use ndarray::{Array, ArrayBase, DataMut, Dim, IntoDimension, Ix, RemoveAxis};
-use num::{Complex, Integer};
+use num::Complex;
 use rustfft::FftNum;
 
 pub struct Processor<T: FftNum> {
@@ -103,19 +103,10 @@ impl<T: FftNum> Processor<T> {
         let mut output = Array::zeros(output_shape);
 
         for (mut input, mut output) in input.rows_mut().into_iter().zip(output.rows_mut()) {
-            if input.len().is_odd() {
-                unsafe { input.uget_mut(0).im = T::zero() };
-                unsafe { input.uget_mut(input.len() - 1).im = T::zero() }
-            }
-            // else {
-            //     unsafe { input.uget_mut(0).im = T::zero() };
-            // };
-
-            rp.process(
+            let _ = rp.process(
                 input.as_slice_mut().unwrap(),
                 output.as_slice_mut().unwrap(),
-            )
-            .unwrap();
+            );
         }
 
         let len = T::from_usize(output.len()).unwrap();
@@ -213,5 +204,52 @@ mod tests {
         let a = p.backward(a_fft);
 
         dbg!(&a);
+    }
+
+    #[test]
+    fn test_forward_backward_complex() {
+        let mut arr = array![[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4],]
+            .map(|&v| Complex::new(v as f32, 0.0));
+        let mut fft = rustfft::FftPlanner::new();
+
+        // forward
+        let row_forward = fft.plan_fft_forward(arr.shape()[1]);
+        for mut row in arr.rows_mut() {
+            row_forward.process(row.as_slice_mut().unwrap());
+        }
+
+        // transpose
+        let mut arr = Array::from_shape_vec(
+            [arr.shape()[1], arr.shape()[0]],
+            arr.permuted_axes([1, 0]).iter().copied().collect(),
+        )
+        .unwrap();
+
+        let row_forward = fft.plan_fft_forward(arr.shape()[1]);
+        for mut row in arr.rows_mut() {
+            row_forward.process(row.as_slice_mut().unwrap());
+        }
+
+        arr /= Complex::new(16.0, 0.0);
+
+        // backward
+        let row_backward = fft.plan_fft_inverse(arr.shape()[1]);
+        for mut row in arr.rows_mut() {
+            row_backward.process(row.as_slice_mut().unwrap());
+        }
+
+        // transpose
+        let mut arr = Array::from_shape_vec(
+            [arr.shape()[1], arr.shape()[0]],
+            arr.permuted_axes([1, 0]).iter().copied().collect(),
+        )
+        .unwrap();
+
+        let row_backward = fft.plan_fft_inverse(arr.shape()[1]);
+        for mut row in arr.rows_mut() {
+            row_backward.process(row.as_slice_mut().unwrap());
+        }
+
+        dbg!(arr);
     }
 }
