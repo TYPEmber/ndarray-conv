@@ -117,12 +117,8 @@ impl<T: FftNum> Processor<T> {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{array, s, Axis, Dimension, IntoDimension};
-    use num::Zero;
-
-    use crate::{conv_fft, ConvMode, PaddingMode};
-
     use super::*;
+    use ndarray::{array, Axis};
 
     #[test]
     fn index_axis() {
