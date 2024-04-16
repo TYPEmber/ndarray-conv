@@ -52,14 +52,14 @@ where
         fft_processor: &mut Processor<T>,
     ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>;
 
-    fn conv_fft_bake(
-        &self,
-        kernel: impl IntoKernelWithDilation<'a, SK, N>,
-        conv_mode: ConvMode<N>,
-        padding_mode: PaddingMode<N, T>,
-    ) -> Result<Baked<T, SK, N>, crate::Error<N>>;
+    // fn conv_fft_bake(
+    //     &self,
+    //     kernel: impl IntoKernelWithDilation<'a, SK, N>,
+    //     conv_mode: ConvMode<N>,
+    //     padding_mode: PaddingMode<N, T>,
+    // ) -> Result<Baked<T, SK, N>, crate::Error<N>>;
 
-    fn conv_fft_with_baked(&self, baked: &mut Baked<T, SK, N>) -> Array<T, Dim<[Ix; N]>>;
+    // fn conv_fft_with_baked(&self, baked: &mut Baked<T, SK, N>) -> Array<T, Dim<[Ix; N]>>;
 }
 
 impl<'a, T, S, SK, const N: usize> ConvFFTExt<'a, T, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
@@ -72,93 +72,93 @@ where
         SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
 {
-    fn conv_fft_bake(
-        &self,
-        kernel: impl IntoKernelWithDilation<'a, SK, N>,
-        conv_mode: ConvMode<N>,
-        padding_mode: PaddingMode<N, T>,
-    ) -> Result<Baked<T, SK, N>, crate::Error<N>> {
-        let mut fft_processor = Processor::default();
+    // fn conv_fft_bake(
+    //     &self,
+    //     kernel: impl IntoKernelWithDilation<'a, SK, N>,
+    //     conv_mode: ConvMode<N>,
+    //     padding_mode: PaddingMode<N, T>,
+    // ) -> Result<Baked<T, SK, N>, crate::Error<N>> {
+    //     let mut fft_processor = Processor::default();
 
-        let kwd = kernel.into_kernel_with_dilation();
+    //     let kwd = kernel.into_kernel_with_dilation();
 
-        let data_raw_dim = self.raw_dim();
-        if self.shape().iter().product::<usize>() == 0 {
-            return Err(crate::Error::DataShape(data_raw_dim));
-        }
+    //     let data_raw_dim = self.raw_dim();
+    //     if self.shape().iter().product::<usize>() == 0 {
+    //         return Err(crate::Error::DataShape(data_raw_dim));
+    //     }
 
-        let kernel_raw_dim = kwd.kernel.raw_dim();
-        if kwd.kernel.shape().iter().product::<usize>() == 0 {
-            return Err(crate::Error::DataShape(kernel_raw_dim));
-        }
+    //     let kernel_raw_dim = kwd.kernel.raw_dim();
+    //     if kwd.kernel.shape().iter().product::<usize>() == 0 {
+    //         return Err(crate::Error::DataShape(kernel_raw_dim));
+    //     }
 
-        let kernel_raw_dim_with_dilation: [usize; N] =
-            std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
+    //     let kernel_raw_dim_with_dilation: [usize; N] =
+    //         std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
 
-        let cm = conv_mode.unfold(&kwd);
+    //     let cm = conv_mode.unfold(&kwd);
 
-        let pds_raw_dim: [usize; N] =
-            std::array::from_fn(|i| (data_raw_dim[i] + cm.padding[i][0] + cm.padding[i][1]));
-        if !(0..N).all(|i| kernel_raw_dim_with_dilation[i] <= pds_raw_dim[i]) {
-            return Err(crate::Error::MismatchShape(
-                conv_mode,
-                kernel_raw_dim_with_dilation,
-            ));
-        }
+    //     let pds_raw_dim: [usize; N] =
+    //         std::array::from_fn(|i| (data_raw_dim[i] + cm.padding[i][0] + cm.padding[i][1]));
+    //     if !(0..N).all(|i| kernel_raw_dim_with_dilation[i] <= pds_raw_dim[i]) {
+    //         return Err(crate::Error::MismatchShape(
+    //             conv_mode,
+    //             kernel_raw_dim_with_dilation,
+    //         ));
+    //     }
 
-        let fft_size = good_size::compute::<N>(&std::array::from_fn(|i| {
-            pds_raw_dim[i].max(kernel_raw_dim_with_dilation[i])
-        }));
+    //     let fft_size = good_size::compute::<N>(&std::array::from_fn(|i| {
+    //         pds_raw_dim[i].max(kernel_raw_dim_with_dilation[i])
+    //     }));
 
-        let scratch = fft_processor.get_scratch(fft_size);
+    //     let scratch = fft_processor.get_scratch(fft_size);
 
-        let kernel_pd = padding::kernel(kwd, fft_size);
+    //     let kernel_pd = padding::kernel(kwd, fft_size);
 
-        Ok(Baked {
-            fft_size,
-            fft_processor,
-            scratch,
-            cm,
-            padding_mode,
-            kernel_raw_dim_with_dilation,
-            pds_raw_dim,
-            kernel_pd,
-            _sk_hint: PhantomData,
-        })
-    }
+    //     Ok(Baked {
+    //         fft_size,
+    //         fft_processor,
+    //         scratch,
+    //         cm,
+    //         padding_mode,
+    //         kernel_raw_dim_with_dilation,
+    //         pds_raw_dim,
+    //         kernel_pd,
+    //         _sk_hint: PhantomData,
+    //     })
+    // }
 
-    fn conv_fft_with_baked(&self, baked: &mut Baked<T, SK, N>) -> Array<T, Dim<[Ix; N]>> {
-        let Baked {
-            scratch,
-            fft_processor,
-            fft_size,
-            cm,
-            padding_mode,
-            kernel_pd,
-            kernel_raw_dim_with_dilation,
-            pds_raw_dim,
-            _sk_hint,
-        } = baked;
+    // fn conv_fft_with_baked(&self, baked: &mut Baked<T, SK, N>) -> Array<T, Dim<[Ix; N]>> {
+    //     let Baked {
+    //         scratch,
+    //         fft_processor,
+    //         fft_size,
+    //         cm,
+    //         padding_mode,
+    //         kernel_pd,
+    //         kernel_raw_dim_with_dilation,
+    //         pds_raw_dim,
+    //         _sk_hint,
+    //     } = baked;
 
-        let mut data_pd = padding::data(self, *padding_mode, cm.padding, *fft_size);
+    //     let mut data_pd = padding::data(self, *padding_mode, cm.padding, *fft_size);
 
-        let mut data_pd_fft = fft_processor.forward_with_scratch(&mut data_pd, scratch);
-        let kernel_pd_fft = fft_processor.forward_with_scratch(kernel_pd, scratch);
+    //     let mut data_pd_fft = fft_processor.forward_with_scratch(&mut data_pd, scratch);
+    //     let kernel_pd_fft = fft_processor.forward_with_scratch(kernel_pd, scratch);
 
-        data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
-        // let mul_spec = data_pd_fft * kernel_pd_fft;
+    //     data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
+    //     // let mul_spec = data_pd_fft * kernel_pd_fft;
 
-        let output = fft_processor.backward(data_pd_fft);
+    //     let output = fft_processor.backward(data_pd_fft);
 
-        output.slice_move(unsafe {
-            SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
-                start: kernel_raw_dim_with_dilation[i] as isize - 1,
-                end: Some((pds_raw_dim[i]) as isize),
-                step: cm.strides[i] as isize,
-            }))
-            .unwrap()
-        })
-    }
+    //     output.slice_move(unsafe {
+    //         SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
+    //             start: kernel_raw_dim_with_dilation[i] as isize - 1,
+    //             end: Some((pds_raw_dim[i]) as isize),
+    //             step: cm.strides[i] as isize,
+    //         }))
+    //         .unwrap()
+    //     })
+    // }
 
     fn conv_fft(
         &self,

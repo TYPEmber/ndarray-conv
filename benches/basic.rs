@@ -10,12 +10,8 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut fft_processor = FftProcessor::default();
 
-    let mut baked = x
-        .conv_fft_bake(&k, ConvMode::Same, PaddingMode::Zeros)
-        .unwrap();
-
-    c.bench_function("fft_with_baked", |b| {
-        b.iter(|| x.conv_fft_with_baked(&mut baked))
+    c.bench_function("fft", |b| {
+        b.iter(|| x.conv_fft(&k, ConvMode::Same, PaddingMode::Zeros))
     });
 
     c.bench_function("fft_with_processor", |b| {
@@ -24,9 +20,13 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("fft", |b| {
-        b.iter(|| x.conv_fft(&k, ConvMode::Same, PaddingMode::Zeros))
-    });
+    // let mut baked = x
+    // .conv_fft_bake(&k, ConvMode::Same, PaddingMode::Zeros)
+    // .unwrap();
+
+    // c.bench_function("fft_with_baked", |b| {
+    //     b.iter(|| x.conv_fft_with_baked(&mut baked))
+    // });
 }
 
 criterion_group!(benches, criterion_benchmark);
