@@ -19,6 +19,28 @@ impl<T: FftNum> Default for Processor<T> {
 }
 
 impl<T: FftNum> Processor<T> {
+    #[allow(clippy::uninit_vec)]
+    pub fn get_scratch<const N: usize>(&mut self, input_dim: [usize; N]) -> Vec<Complex<T>> {
+        // needs to check backward len
+        let mut output_shape = input_dim;
+        let rp = self.rp.plan_fft_forward(output_shape[N - 1]);
+        let rp_len = rp.get_scratch_len();
+
+        output_shape[N - 1] = rp.complex_len();
+        let cp_len = output_shape
+            .iter()
+            .take(N - 1)
+            .map(|&dim| self.cp.plan_fft_forward(dim).get_inplace_scratch_len())
+            .max()
+            .unwrap_or(0);
+
+        // avoid init mem
+        let mut scratch = Vec::with_capacity(rp_len.max(cp_len));
+        unsafe { scratch.set_len(rp_len.max(cp_len)) };
+
+        scratch
+    }
+
     pub fn forward<S: DataMut<Elem = T>, const N: usize>(
         &mut self,
         input: &mut ArrayBase<S, Dim<[Ix; N]>>,
@@ -106,6 +128,105 @@ impl<T: FftNum> Processor<T> {
             let _ = rp.process(
                 input.as_slice_mut().unwrap(),
                 output.as_slice_mut().unwrap(),
+            );
+        }
+
+        let len = T::from_usize(output.len()).unwrap();
+        output.map_mut(|x| *x = x.div(len));
+        output
+    }
+
+    pub fn forward_with_scratch<S: DataMut<Elem = T>, const N: usize>(
+        &mut self,
+        input: &mut ArrayBase<S, Dim<[Ix; N]>>,
+        scratch: &mut Vec<Complex<T>>,
+    ) -> Array<Complex<T>, Dim<[Ix; N]>>
+    where
+        Dim<[Ix; N]>: RemoveAxis,
+        [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
+    {
+        let raw_dim: [usize; N] = std::array::from_fn(|i| input.raw_dim()[i]);
+
+        let rp = self.rp.plan_fft_forward(raw_dim[N - 1]);
+        self.rp_origin_len = rp.len();
+
+        let mut output_shape = raw_dim;
+        output_shape[N - 1] = rp.complex_len();
+        let mut output = Array::zeros(output_shape);
+
+        for (mut input, mut output) in input.rows_mut().into_iter().zip(output.rows_mut()) {
+            rp.process_with_scratch(
+                input.as_slice_mut().unwrap(),
+                output.as_slice_mut().unwrap(),
+                scratch,
+            )
+            .unwrap();
+        }
+
+        let mut axes: [usize; N] = std::array::from_fn(|i| i);
+        axes.rotate_right(1);
+        for _ in 0..N - 1 {
+            output_shape.rotate_right(1);
+
+            // transpose takes a lot of time
+            // this method is very slow
+            // input = Array::from_shape_vec(
+            //     raw_dim.into_dimension(),
+            //     input.permuted_axes(axes).iter().copied().collect(),
+            // )
+            // .unwrap();
+
+            let mut buffer = Array::uninit(output_shape.into_dimension());
+            buffer.zip_mut_with(&output.permuted_axes(axes), |transpose, &origin| {
+                transpose.write(origin);
+            });
+            output = unsafe { buffer.assume_init() };
+
+            let cp = self.cp.plan_fft_forward(output_shape[N - 1]);
+            cp.process_with_scratch(output.as_slice_mut().unwrap(), scratch);
+        }
+
+        output
+    }
+
+    pub fn backward_with_scratch<const N: usize>(
+        &mut self,
+        mut input: Array<Complex<T>, Dim<[Ix; N]>>,
+        scratch: &mut Vec<Complex<T>>,
+    ) -> Array<T, Dim<[Ix; N]>>
+    where
+        Dim<[Ix; N]>: RemoveAxis,
+        [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
+    {
+        // at this time, the raw_dim has been routate_left by N - 1 times
+        let mut raw_dim: [usize; N] = std::array::from_fn(|i| input.raw_dim()[i]);
+
+        let rp = self.rp.plan_fft_inverse(self.rp_origin_len);
+
+        let mut axes: [usize; N] = std::array::from_fn(|i| i);
+        axes.rotate_left(1);
+        for _ in 0..N - 1 {
+            let cp = self.cp.plan_fft_inverse(raw_dim[N - 1]);
+            cp.process_with_scratch(input.as_slice_mut().unwrap(), scratch);
+
+            raw_dim.rotate_left(1);
+
+            let mut buffer = Array::uninit(raw_dim.into_dimension());
+            buffer.zip_mut_with(&input.permuted_axes(axes), |transpose, &origin| {
+                transpose.write(origin);
+            });
+            input = unsafe { buffer.assume_init() };
+        }
+
+        let mut output_shape = input.raw_dim();
+        output_shape[N - 1] = self.rp_origin_len;
+        let mut output = Array::zeros(output_shape);
+
+        for (mut input, mut output) in input.rows_mut().into_iter().zip(output.rows_mut()) {
+            let _ = rp.process_with_scratch(
+                input.as_slice_mut().unwrap(),
+                output.as_slice_mut().unwrap(),
+                scratch,
             );
         }
 

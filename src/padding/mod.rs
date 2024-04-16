@@ -1,8 +1,8 @@
 use super::{BorderType, PaddingMode};
 
 use ndarray::{
-    Array, ArrayBase, Data, DataMut, Dim, IntoDimension, Ix, RemoveAxis,
-    SliceArg, SliceInfo, SliceInfoElem,
+    Array, ArrayBase, Data, DataMut, Dim, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo,
+    SliceInfoElem,
 };
 use num::traits::NumAssign;
 
