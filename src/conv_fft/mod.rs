@@ -13,6 +13,8 @@ mod fft;
 mod good_size;
 mod padding;
 
+pub use fft::Processor;
+
 pub trait ConvFFTExt<'a, T, S, SK, const N: usize>
 where
     T: FftNum + NumAssign,
@@ -24,6 +26,14 @@ where
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
+    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>;
+
+    fn conv_fft_with_processor(
+        &self,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
+        conv_mode: ConvMode<N>,
+        padding_mode: PaddingMode<N, T>,
+        fft_processor: &mut Processor<T>,
     ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>;
 }
 
@@ -42,6 +52,18 @@ where
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
+    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>
+    {
+        let mut p = Processor::default();
+        self.conv_fft_with_processor(kernel, conv_mode, padding_mode, &mut p)
+    }
+
+    fn conv_fft_with_processor(
+        &self,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
+        conv_mode: ConvMode<N>,
+        padding_mode: PaddingMode<N, T>,
+        fft_processor: &mut Processor<T>,
     ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>> {
         let kwd = kernel.into_kernel_with_dilation();
 
@@ -76,15 +98,13 @@ where
         let mut data_pd = padding::data(self, padding_mode, cm.padding, fft_size);
         let mut kernel_pd = padding::kernel(kwd, fft_size);
 
-        let mut fft = fft::Processor::default();
-
-        let mut data_pd_fft = fft.forward(&mut data_pd);
-        let kernel_pd_fft = fft.forward(&mut kernel_pd);
+        let mut data_pd_fft = fft_processor.forward(&mut data_pd);
+        let kernel_pd_fft = fft_processor.forward(&mut kernel_pd);
 
         data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
         // let mul_spec = data_pd_fft * kernel_pd_fft;
 
-        let output = fft.backward(data_pd_fft);
+        let output = fft_processor.backward(data_pd_fft);
 
         let output = output.slice_move(unsafe {
             SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {

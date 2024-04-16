@@ -6,7 +6,7 @@ mod padding;
 pub(crate) use padding::ExplicitPadding;
 
 pub use conv::ConvExt;
-pub use conv_fft::ConvFFTExt;
+pub use conv_fft::{ConvFFTExt, Processor as FftProcessor};
 pub use dilation::WithDilation;
 
 #[derive(Debug, Clone, Copy)]

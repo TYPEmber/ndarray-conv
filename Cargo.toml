@@ -21,3 +21,8 @@ ndarray-rand = "0.14"
 
 [dev-dependencies]
 tch = {version = "0.13.0", features = ["download-libtorch"]}
+criterion = { version = "0.4", features = ["html_reports"] }
+
+[[bench]]
+name = "basic"
+harness = false
