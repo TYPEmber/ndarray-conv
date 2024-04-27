@@ -30,7 +30,7 @@ use ndarray_conv::*;
 
 x_nd.conv(
     &k_n,
-    PaddingSize::Full,
+    ConvMode::Full,
     PaddingMode::Circular,
 );
 
@@ -42,7 +42,7 @@ x_1d.view().conv_fft(
 
 x_2d.conv_fft(
     k_2d.with_dilation(2),
-    PaddingSize::Same,
+    ConvMode::Same,
     PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
 );
 
