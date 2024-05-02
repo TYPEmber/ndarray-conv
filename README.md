@@ -90,6 +90,40 @@ fn main() {
     );
 }
 ```
+
+## Benchmark
+
+```rust
+let x = Array::random(5000, Uniform::new(0f32, 1.));
+let k = Array::random(31, Uniform::new(0f32, 1.));
+
+fft_1d                  time:   [76.621 µs 76.649 µs 76.681 µs]
+fft_with_processor_1d   time:   [34.563 µs 34.790 µs 35.125 µs]
+torch_1d                time:   [45.542 µs 45.658 µs 45.775 µs]
+fftconvolve_1d          time:   [161.52 µs 162.28 µs 163.05 µs]
+
+---------------------------------------------------------------
+
+let x = Array::random((200, 5000), Uniform::new(0f32, 1.));
+let k = Array::random((11, 31), Uniform::new(0f32, 1.));
+
+fft_2d                  time:   [16.022 ms 16.046 ms 16.071 ms]
+fft_with_processor_2d   time:   [15.949 ms 15.977 ms 16.010 ms]
+torch_2d                time:   [109.76 ms 111.62 ms 113.79 ms]
+ndarray_vision_2d       time:   [429.47 ms 429.64 ms 429.82 ms]
+fftconvolve_2d          time:   [56.273 ms 56.342 ms 56.420 ms]
+
+---------------------------------------------------------------
+
+let x = Array::random((10, 100, 200), Uniform::new(0f32, 1.));
+let k = Array::random((5, 11, 31), Uniform::new(0f32, 1.));
+
+fft_3d                  time:   [5.3049 ms 5.3498 ms 5.3957 ms]
+fft_with_processor_3d   time:   [5.2981 ms 5.3345 ms 5.3696 ms]
+torch_3d                time:   [147.20 ms 151.97 ms 158.54 ms]
+fftconvolve_3d          time:   [11.991 ms 12.009 ms 12.031 ms]
+```
+
 ## Versions
 - 0.3.3 - Bug fix: correct conv_fft's output shape.
 - 0.3.2 - Improve performance, by modifying `good_fft_size` and `transpose`.
