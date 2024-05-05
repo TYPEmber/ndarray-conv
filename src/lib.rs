@@ -1,5 +1,6 @@
 mod conv;
 mod conv_fft;
+mod conv_wgpu;
 mod dilation;
 mod padding;
 
@@ -8,6 +9,8 @@ pub(crate) use padding::ExplicitPadding;
 pub use conv::ConvExt;
 pub use conv_fft::{ConvFFTExt, Processor as FftProcessor};
 pub use dilation::WithDilation;
+
+pub use conv_wgpu::tests::get_gpu;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ConvMode<const N: usize> {

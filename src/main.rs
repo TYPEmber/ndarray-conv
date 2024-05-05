@@ -7,18 +7,20 @@ fn main() {
     use ndarray_rand::RandomExt;
     use std::time::Instant;
 
+    get_gpu();
+
     let mut small_duration = 0u128;
-    let test_cycles_small = 10;
+    let test_cycles_small = 1;
     // small input images
-    for i in 0..100 {
+    for i in 0..1 {
         for _ in 0..test_cycles_small {
-            let x = Array::random((1007 + i, 4007 + i), Uniform::new(0f32, 1.));
-            let k = Array::random((27, 21), Uniform::new(0f32, 1.));
+            let x = Array::random(65530, Uniform::new(0, 100));
+            let k = Array::random(100, Uniform::new(0, 100));
             // let x = Array::random(20000 + i, Uniform::new(0f32, 1.));
             // let k = Array::random(200, Uniform::new(0f32, 1.));
 
             let now = Instant::now();
-            let a = x.conv(k.with_dilation(2), ConvMode::Same, PaddingMode::Zeros).unwrap();
+            // let a = x.conv(k.with_dilation(2), ConvMode::Same, PaddingMode::Zeros).unwrap();
             let b = x.conv_fft(
                 k.with_dilation(2),
                 ConvMode::Same,
@@ -29,8 +31,8 @@ fn main() {
 
             // dbg!(&a, &b);
 
-            let d = a - b;
-            assert!(d.iter().all(|&v| v.abs() < 1e-3));
+            // let d = a - b;
+            // assert!(d.iter().all(|&v| v.abs() < 1e-3));
 
             // dbg!(d);
 
@@ -63,7 +65,7 @@ fn main() {
         println!(
             "Time for {i} arrays, {} iterations: {} milliseconds",
             test_cycles_small,
-            small_duration / 1_000_000
+            small_duration as f64 / 1e6
         );
         small_duration = 0;
     }

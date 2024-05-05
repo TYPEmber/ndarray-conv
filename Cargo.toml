@@ -15,6 +15,10 @@ num = "0.4"
 rustfft = "6.2"
 realfft = "3.3"
 thiserror = "1.0"
+wgpu = "0.20"
+bytemuck = "1.15"
+flume = "0.11"
+pollster = "0.3"
 
 # [dev-dependencies]
 ndarray-rand = "0.14"
@@ -26,6 +30,7 @@ fft-convolver = "0.2"
 fftconvolve = "0.1"
 convolutions-rs = "0.3"
 ndarray-vision = "0.5"
+pollster = "0.3"
 
 [[bench]]
 name = "with_torch"
