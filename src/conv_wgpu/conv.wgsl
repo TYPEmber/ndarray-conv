@@ -1,15 +1,15 @@
 @group(0)
 @binding(0)
-var<storage, read_write> data: array<i32>;
+var<storage, read> data: array<i32>;
 @group(0)
 @binding(1)
 var<storage, read_write> output: array<i32>;
 @group(0)
 @binding(2)
-var<storage, read_write> kernal_offset: array<i32>;
+var<storage, read> kernal_offset: array<i32>;
 @group(0)
 @binding(3)
-var<storage, read_write> kernel_value: array<i32>;
+var<storage, read> kernel_value: array<i32>;
 
 
 @compute

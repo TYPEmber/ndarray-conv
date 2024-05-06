@@ -108,15 +108,12 @@ pub mod tests {
             label: Some("pds Buffer"),
             contents: bytemuck::cast_slice(&pds),
             usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
         });
 
         let output_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("output Buffer"),
             contents: bytemuck::cast_slice(&pds),
             usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
         });
 
@@ -124,16 +121,12 @@ pub mod tests {
             label: Some("ko Buffer"),
             contents: bytemuck::cast_slice(&k_o),
             usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
         });
 
         let kv_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("kv Buffer"),
             contents: bytemuck::cast_slice(&k_v),
             usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
         });
 
         let d_buff = t.elapsed().as_nanos() as f64 / 1e6;
