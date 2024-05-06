@@ -14,8 +14,8 @@ fn main() {
     // small input images
     for i in 0..1 {
         for _ in 0..test_cycles_small {
-            let x = Array::random(65530, Uniform::new(0, 100));
-            let k = Array::random(100, Uniform::new(0, 100));
+            let x = Array::random((1000, 4000), Uniform::new(0, 100));
+            let k = Array::random((20, 40), Uniform::new(0, 100));
             // let x = Array::random(20000 + i, Uniform::new(0f32, 1.));
             // let k = Array::random(200, Uniform::new(0f32, 1.));
 

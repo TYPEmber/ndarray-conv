@@ -17,10 +17,11 @@ var<storage, read_write> kernel_value: array<i32>;
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // v_indices[global_id.x] = collatz_iterations(v_indices[global_id.x]);
     var sum = 0;
+    var index = global_id.x + global_id.y * 65535 + global_id.z * 65535 * 65535;
     for (var i = 0; i < i32(arrayLength(&kernal_offset)); i++) {
-        sum += data[i32(global_id.x) + kernal_offset[i]] * kernel_value[i];
+        sum += data[i32(index) + kernal_offset[i]] * kernel_value[i];
     }
-    output[global_id.x] = sum;
+    output[index] = sum;
 
     // data[global_id.x] = i32(global_id.x) * data[global_id.x];
 }

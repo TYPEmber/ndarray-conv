@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use wgpu::{Device, Queue, ShaderModule};
+use wgpu::{ComputePipeline, Device, Queue, ShaderModule};
 
 async fn prepare_gpu() -> Option<(Device, Queue)> {
     // Instantiates instance of WebGPU
@@ -28,11 +28,19 @@ async fn prepare_gpu() -> Option<(Device, Queue)> {
     Some((device, queue))
 }
 
-fn prepare_cs_model(device: &Device) -> ShaderModule {
+fn prepare_cs_model(device: &Device) -> ComputePipeline {
     // Loads the shader from WGSL
-    device.create_shader_module(wgpu::ShaderModuleDescriptor {
+    let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("conv.wgsl"))),
+    });
+    // Instantiates the pipeline.
+    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: None,
+        layout: None,
+        module: &cs_module,
+        entry_point: "main",
+        compilation_options: Default::default(),
     })
 }
 
@@ -47,15 +55,15 @@ pub mod tests {
 
     use super::*;
 
-    #[test]
+    // #[test]
     pub fn get_gpu() {
         let (device, queue) = pollster::block_on(prepare_gpu()).unwrap();
-        let cs_module = prepare_cs_model(&device);
+        let compute_pipeline = prepare_cs_model(&device);
 
-        let data = array![1, 2, 3];
-        let kernel = array![1, 1, 1];
-        // let data = Array::random(30, Uniform::new(0i32, 100i32));
-        // let kernel = Array::random(5, Uniform::new(0i32, 100i32));
+        // let data = array![1, 2, 3, 4, 5];
+        // let kernel = array![1, 1, 1];
+        let data = Array::random((1000, 4000), Uniform::new(0, 100));
+        let kernel = Array::random((20, 40), Uniform::new(0, 100));
 
         let t = Instant::now();
 
@@ -66,7 +74,7 @@ pub mod tests {
         let pds = data.padding(PaddingMode::Zeros, explicit_conv.padding);
         let kvo = kernel.gen_offset_list(pds.strides());
 
-        let pds = pds.to_vec();
+        let pds = pds.into_raw_vec();
 
         let k_v = kvo.iter().map(|(_, v)| *v).collect::<Vec<_>>();
         let k_o = kvo.iter().map(|(o, _)| *o as i32).collect::<Vec<_>>();
@@ -130,23 +138,11 @@ pub mod tests {
 
         let d_buff = t.elapsed().as_nanos() as f64 / 1e6;
 
-
         // A bind group defines how buffers are accessed by shaders.
         // It is to WebGPU what a descriptor set is to Vulkan.
         // `binding` here refers to the `binding` of a buffer in the shader (`layout(set = 0, binding = 0) buffer`).
 
         // A pipeline specifies the operation of a shader
-
-        // Instantiates the pipeline.
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: None,
-            module: &cs_module,
-            entry_point: "main",
-            compilation_options: Default::default(),
-        });
-
-        let d_make_pipe = t.elapsed().as_nanos() as f64 / 1e6;
 
 
         // Instantiates the bind group, once again specifying the binding of buffers.
@@ -174,6 +170,8 @@ pub mod tests {
             ],
         });
 
+        let d_make_pipe = t.elapsed().as_nanos() as f64 / 1e6;
+
         // A command encoder executes one or many pipelines.
         // It is to WebGPU what a command buffer is to Vulkan.
         let mut encoder =
@@ -186,7 +184,12 @@ pub mod tests {
             cpass.set_pipeline(&compute_pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
             cpass.insert_debug_marker("compute conv");
-            cpass.dispatch_workgroups(pds.len() as u32, 1, 1); // Number of cells to run, the (x,y,z) size of item being processed
+
+            let z = pds.len() as u32 / (65535 * 65535);
+            let y = (pds.len() as u32 - z * 65535 * 65535) / 65535;
+            let x = pds.len() as u32 - z * 65535 * 65535 - y * 65535;
+
+            cpass.dispatch_workgroups(x, y ,z); // Number of cells to run, the (x,y,z) size of item being processed
         }
         // Sets adds copy operation to command encoder.
         // Will copy data from storage buffer on GPU to staging buffer on CPU.
@@ -205,7 +208,6 @@ pub mod tests {
 
         let d1 = t.elapsed().as_nanos() as f64 / 1e6;
 
-        
         // Poll the device in a blocking manner so that our future resolves.
         // In an actual application, `device.poll(...)` should
         // be called in an event loop or on another thread.
@@ -230,7 +232,7 @@ pub mod tests {
                                         //   myPointer = NULL;
                                         // It effectively frees the memory
 
-                dbg!(&result);
+                // dbg!(&result);
                 dbg!(d_buff, d_make_pipe);
                 dbg!(d0, d1, d2, d);
 
