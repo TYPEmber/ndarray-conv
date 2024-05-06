@@ -189,7 +189,7 @@ pub mod tests {
             let y = (pds.len() as u32 - z * 65535 * 65535) / 65535;
             let x = pds.len() as u32 - z * 65535 * 65535 - y * 65535;
 
-            cpass.dispatch_workgroups(x, y ,z); // Number of cells to run, the (x,y,z) size of item being processed
+            cpass.dispatch_workgroups(x, y.max(1) ,z.max(1)); // Number of cells to run, the (x,y,z) size of item being processed
         }
         // Sets adds copy operation to command encoder.
         // Will copy data from storage buffer on GPU to staging buffer on CPU.
