@@ -8,7 +8,10 @@ async fn prepare_gpu() -> Option<(Device, Queue)> {
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions::default())
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            ..Default::default()
+        })
         .await?;
 
     // `request_device` instantiates the feature specific connection to the GPU, defining some parameters,
@@ -51,7 +54,10 @@ pub mod tests {
     use ndarray_rand::{rand_distr::Uniform, RandomExt};
     use wgpu::{hal::auxil::db, util::DeviceExt};
 
-    use crate::{dilation::IntoKernelWithDilation, padding::PaddingExt, ConvMode, PaddingMode};
+    use crate::{
+        dilation::IntoKernelWithDilation, padding::PaddingExt, ConvExt, ConvFFTExt, ConvMode,
+        PaddingMode,
+    };
 
     use super::*;
 
@@ -62,8 +68,14 @@ pub mod tests {
 
         // let data = array![1, 2, 3, 4, 5];
         // let kernel = array![1, 1, 1];
+        // let data = array![[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+        // let kernel = array![[1, 1, 1]];
+
         let data = Array::random((1000, 4000), Uniform::new(0, 100));
-        let kernel = Array::random((20, 40), Uniform::new(0, 100));
+        let kernel = Array::random((21, 41), Uniform::new(0, 100));
+
+        let data_c = data.clone();
+        let kernel_c = kernel.clone();
 
         let t = Instant::now();
 
@@ -73,6 +85,10 @@ pub mod tests {
 
         let pds = data.padding(PaddingMode::Zeros, explicit_conv.padding);
         let kvo = kernel.gen_offset_list(pds.strides());
+
+        let strides_buffer = pds.strides().iter().map(|pds_s| (*pds_s as u32));
+
+        dbg!(pds.shape(), pds.strides());
 
         let pds = pds.into_raw_vec();
 
@@ -107,26 +123,31 @@ pub mod tests {
         let pds_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("pds Buffer"),
             contents: bytemuck::cast_slice(&pds),
-            usage: wgpu::BufferUsages::STORAGE
+            usage: wgpu::BufferUsages::STORAGE,
         });
 
         let output_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("output Buffer"),
             contents: bytemuck::cast_slice(&pds),
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         });
 
         let ko_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("ko Buffer"),
             contents: bytemuck::cast_slice(&k_o),
-            usage: wgpu::BufferUsages::STORAGE
+            usage: wgpu::BufferUsages::STORAGE,
         });
 
         let kv_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("kv Buffer"),
             contents: bytemuck::cast_slice(&k_v),
-            usage: wgpu::BufferUsages::STORAGE
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let strides_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("strides Buffer"),
+            contents: bytemuck::cast_slice(&k_v),
+            usage: wgpu::BufferUsages::STORAGE,
         });
 
         let d_buff = t.elapsed().as_nanos() as f64 / 1e6;
@@ -136,7 +157,6 @@ pub mod tests {
         // `binding` here refers to the `binding` of a buffer in the shader (`layout(set = 0, binding = 0) buffer`).
 
         // A pipeline specifies the operation of a shader
-
 
         // Instantiates the bind group, once again specifying the binding of buffers.
         let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
@@ -160,6 +180,10 @@ pub mod tests {
                     binding: 3,
                     resource: kv_buffer.as_entire_binding(),
                 },
+                // wgpu::BindGroupEntry {
+                //     binding: 4,
+                //     resource: strides_buffer.as_entire_binding(),
+                // },
             ],
         });
 
@@ -182,7 +206,7 @@ pub mod tests {
             let y = (pds.len() as u32 - z * 65535 * 65535) / 65535;
             let x = pds.len() as u32 - z * 65535 * 65535 - y * 65535;
 
-            cpass.dispatch_workgroups(x, y.max(1) ,z.max(1)); // Number of cells to run, the (x,y,z) size of item being processed
+            cpass.dispatch_workgroups(4000, 500, 2); // Number of cells to run, the (x,y,z) size of item being processed
         }
         // Sets adds copy operation to command encoder.
         // Will copy data from storage buffer on GPU to staging buffer on CPU.
@@ -228,6 +252,33 @@ pub mod tests {
                 // dbg!(&result);
                 dbg!(d_buff, d_make_pipe);
                 dbg!(d0, d1, d2, d);
+
+                let ans_fft = data_c
+                    .map(|v| *v as f32)
+                    .conv(
+                        &kernel_c.map(|v| *v as f32),
+                        ConvMode::Same,
+                        PaddingMode::Zeros,
+                    )
+                    .unwrap()
+                    .map(|v| v.round() as i32);
+
+                // let ans_normal = data_c
+                //     .conv(&kernel_c, ConvMode::Same, PaddingMode::Zeros)
+                //     .unwrap();
+
+                // dbg!(&ans_fft, &ans_normal);
+
+                ans_fft
+                    .iter()
+                    .zip(result.iter())
+                    .enumerate()
+                    .for_each(|(i, (a, g))| {
+                        if (a - g) != 0 {
+                            dbg!(a, g, i);
+                            panic!();
+                        }
+                    });
 
                 // Returns data from buffer
                 Some(result)
