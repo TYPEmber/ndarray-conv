@@ -20,6 +20,8 @@ bytemuck = "1.15"
 flume = "0.11"
 pollster = "0.3"
 
+rayon = "*"
+
 # [dev-dependencies]
 ndarray-rand = "0.14"
 

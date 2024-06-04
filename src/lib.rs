@@ -10,7 +10,7 @@ pub use conv::ConvExt;
 pub use conv_fft::{ConvFFTExt, Processor as FftProcessor};
 pub use dilation::WithDilation;
 
-pub use conv_wgpu::tests::get_gpu;
+pub use conv_wgpu::tests::{get_gpu, prepare, compute};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ConvMode<const N: usize> {
