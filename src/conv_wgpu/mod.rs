@@ -79,7 +79,7 @@ fn prepare_cs_model(device: &Device) -> ComputePipeline {
         layout: None,
         module: &cs_module,
         entry_point: "main",
-        compilation_options: PipelineCompilationOptions {
+        compilation_options: wgpu::PipelineCompilationOptions {
             zero_initialize_workgroup_memory: false,
             ..Default::default()
         },
