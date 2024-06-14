@@ -80,9 +80,16 @@ fn test_gpu() {
     let data = Array::random((5, 128, 500), Uniform::new(0, 100));
     let kernel = Array::random((3, 11, 21), Uniform::new(0, 100));
 
-    let ctx = ndarray_conv::prepare(&data, &kernel);
+    // check thread_local
+    // let data_c = data.clone();
+    // let kernel_c = kernel.clone();
+    // std::thread::spawn(move || {
+    //     ndarray_conv::prepare(&data_c, &kernel_c);
+    //     std::thread::sleep_ms(5000)
+    // });
+    ndarray_conv::prepare(&data, &kernel);
 
     loop {
-        ndarray_conv::compute(&ctx, &data, &kernel);
+        ndarray_conv::compute(&data, &kernel);
     }
 }

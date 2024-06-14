@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, cell::RefCell};
 
 use ndarray::{
     ArrayBase, Data, Dim, IntoDimension, Ix, RawData, RemoveAxis, SliceArg, SliceInfo,
@@ -6,9 +6,13 @@ use ndarray::{
 };
 use num::traits::NumAssign;
 use rustfft::FftNum;
-use wgpu::{BindGroup, Buffer, ComputePipeline, Device, Queue, ShaderModule};
+use wgpu::{Backends, BindGroup, Buffer, ComputePipeline, Device, Queue, ShaderModule};
 
 use crate::dilation::KernelWithDilation;
+
+thread_local! {
+    pub static CTX_TL: RefCell<Option<ConvGPUContext>> = const { RefCell::new(None) };
+}
 
 #[derive(Debug)]
 pub struct ConvGPUContext {
@@ -25,9 +29,18 @@ pub struct ConvGPUContext {
     pub staging_buffer: Buffer,
 }
 
+impl Drop for ConvGPUContext {
+    fn drop(&mut self) {
+        dbg!("CTX_TL DROP!");
+    }
+}
+
 async fn prepare_gpu() -> Option<(Device, Queue)> {
     // Instantiates instance of WebGPU
     let instance = wgpu::Instance::default();
+
+    dbg!(instance.enumerate_adapters(Backends::VULKAN));
+    dbg!(instance.enumerate_adapters(Backends::GL));
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance
@@ -66,7 +79,10 @@ fn prepare_cs_model(device: &Device) -> ComputePipeline {
         layout: None,
         module: &cs_module,
         entry_point: "main",
-        compilation_options: Default::default(),
+        compilation_options: PipelineCompilationOptions {
+            zero_initialize_workgroup_memory: false,
+            ..Default::default()
+        },
     })
 }
 
@@ -297,67 +313,70 @@ impl ConvGPUContext {
         // be called in an event loop or on another thread.
         self.device.poll(wgpu::Maintain::wait()).panic_on_timeout();
 
-       //  pollster::block_on(async {
-            let d2 = t.elapsed().as_nanos() as f64 / 1e6;
-            // Awaits until `buffer_future` can be read from
-            if let Ok(Ok(())) = receiver.recv() {
-                let d = t.elapsed().as_nanos() as f64 / 1e6;
-                // Gets contents of buffer
-                let data = buffer_slice.get_mapped_range();
-                // Since contents are got in bytes, this converts these bytes back to u32
-                let result: Vec<i32> = bytemuck::cast_slice(&data).to_vec();
+        //  pollster::block_on(async {
+        let d2 = t.elapsed().as_nanos() as f64 / 1e6;
+        // Awaits until `buffer_future` can be read from
+        if let Ok(Ok(())) = receiver.recv() {
+            let d = t.elapsed().as_nanos() as f64 / 1e6;
+            // Gets contents of buffer
+            let data = buffer_slice.get_mapped_range();
+            // Since contents are got in bytes, this converts these bytes back to u32
+            let result: Vec<i32> = bytemuck::cast_slice(&data).to_vec();
 
-                // With the current interface, we have to make sure all mapped views are
-                // dropped before we unmap the buffer.
-                drop(data);
-                self.staging_buffer.unmap(); // Unmaps buffer from memory
-                                             // If you are familiar with C++ these 2 lines can be thought of similarly to:
-                                             //   delete myPointer;
-                                             //   myPointer = NULL;
-                                             // It effectively frees the memory
+            // With the current interface, we have to make sure all mapped views are
+            // dropped before we unmap the buffer.
+            drop(data);
+            self.staging_buffer.unmap(); // Unmaps buffer from memory
+                                         // If you are familiar with C++ these 2 lines can be thought of similarly to:
+                                         //   delete myPointer;
+                                         //   myPointer = NULL;
+                                         // It effectively frees the memory
 
-                // dbg!(&result);
-                // dbg!(d_buff, d_make_pipe);
-                dbg!(d0, d1, d2, d);
+            // dbg!(&result);
+            // dbg!(d_buff, d_make_pipe);
+            dbg!(d0, d1, d2, d);
 
-                // let ans_fft = data_c
-                //     .map(|v| *v as f32)
-                //     .conv(
-                //         &kernel_c.map(|v| *v as f32),
-                //         ConvMode::Same,
-                //         PaddingMode::Zeros,
-                //     )
-                //     .unwrap()
-                //     .map(|v| v.round() as i32);
+            // let ans_fft = data_c
+            //     .map(|v| *v as f32)
+            //     .conv(
+            //         &kernel_c.map(|v| *v as f32),
+            //         ConvMode::Same,
+            //         PaddingMode::Zeros,
+            //     )
+            //     .unwrap()
+            //     .map(|v| v.round() as i32);
 
-                // let ans_normal = data_c
-                //     .conv(&kernel_c, ConvMode::Same, PaddingMode::Zeros)
-                //     .unwrap();
+            // let ans_normal = data_c
+            //     .conv(&kernel_c, ConvMode::Same, PaddingMode::Zeros)
+            //     .unwrap();
 
-                // dbg!(&ans_fft, &ans_normal);
+            // dbg!(&ans_fft, &ans_normal);
 
-                // ans_fft
-                //     .iter()
-                //     .zip(result.iter())
-                //     .enumerate()
-                //     .for_each(|(i, (a, g))| {
-                //         if (a - g) != 0 {
-                //             dbg!(a, g, i);
-                //             panic!();
-                //         }
-                //     });
+            // ans_fft
+            //     .iter()
+            //     .zip(result.iter())
+            //     .enumerate()
+            //     .for_each(|(i, (a, g))| {
+            //         if (a - g) != 0 {
+            //             dbg!(a, g, i);
+            //             panic!();
+            //         }
+            //     });
 
-                // Returns data from buffer
-                // Some(result)
-            } else {
-                panic!("failed to run compute on gpu!")
-            }
+            // Returns data from buffer
+            // Some(result)
+        } else {
+            panic!("failed to run compute on gpu!")
+        }
         // });
     }
 }
 
 pub mod tests {
-    use std::time::Instant;
+    use std::{
+        borrow::{Borrow, BorrowMut},
+        time::Instant,
+    };
 
     use ndarray::{array, Array, Array3};
     use ndarray_rand::{rand_distr::Uniform, RandomExt};
@@ -371,12 +390,17 @@ pub mod tests {
 
     use super::*;
 
-    pub fn prepare(data: &Array3<i32>, kernel: &Array3<i32>) -> ConvGPUContext {
+    pub fn prepare(data: &Array3<i32>, kernel: &Array3<i32>) {
         let conv_mode = ConvMode::Same;
         let padding_mode = PaddingMode::Zeros;
 
         let (device, queue) = pollster::block_on(prepare_gpu()).unwrap();
         let pipeline = prepare_cs_model(&device);
+
+        dbg!(&device);
+
+        let mut s = "".to_owned();
+        std::io::stdin().read_line(&mut s).unwrap();
 
         // let data = Array::random((5, 128, 500), Uniform::new(0, 100));
         // let kernel = Array::random((3, 11, 21), Uniform::new(0, 100));
@@ -426,35 +450,46 @@ pub mod tests {
         let k_v = kvo.iter().map(|(_, v)| *v).collect::<Vec<_>>();
         let k_o = kvo.iter().map(|(o, _)| *o as i32).collect::<Vec<_>>();
 
-        ConvGPUContext::new(device, queue, pipeline, &pds, &kvo, output_shape)
+        CTX_TL.replace(Some(ConvGPUContext::new(
+            device,
+            queue,
+            pipeline,
+            &pds,
+            &kvo,
+            output_shape,
+        )));
     }
 
-    pub fn compute(ctx: &ConvGPUContext, data: &Array3<i32>, kernel: &Array3<i32>) {
-        let conv_mode = ConvMode::Same;
-        let padding_mode = PaddingMode::Zeros;
+    pub fn compute(data: &Array3<i32>, kernel: &Array3<i32>) {
+        CTX_TL.with_borrow(|ctx| {
+            let ctx = ctx.as_ref().unwrap();
 
-        // let data = Array::random((5, 128, 500), Uniform::new(0, 100));
-        // let kernel = Array::random((3, 11, 21), Uniform::new(0, 100));
+            let conv_mode = ConvMode::Same;
+            let padding_mode = PaddingMode::Zeros;
 
-        let kwd = kernel.into_kernel_with_dilation();
-        let kernel_raw_dim = kwd.kernel.raw_dim();
+            // let data = Array::random((5, 128, 500), Uniform::new(0, 100));
+            // let kernel = Array::random((3, 11, 21), Uniform::new(0, 100));
 
-        const N: usize = 3;
+            let kwd = kernel.into_kernel_with_dilation();
+            let kernel_raw_dim = kwd.kernel.raw_dim();
 
-        let explicit_conv = conv_mode.unfold(&kwd);
+            const N: usize = 3;
 
-        let cm = conv_mode.unfold(&kwd);
-        let pds = data.padding(padding_mode, explicit_conv.padding);
-        let kvo = kwd.gen_offset_list(pds.strides());
+            let explicit_conv = conv_mode.unfold(&kwd);
 
-        let strides_diff = data
-        .strides()
-        .iter()
-        .zip(pds.strides().iter())
-        .map(|(&data_s, &pds_s)| [data_s as u32, pds_s as u32])
-        .collect::<Vec<_>>();
-    
-        ctx.compute(&pds,   &kvo, &strides_diff);
+            let cm = conv_mode.unfold(&kwd);
+            let pds = data.padding(padding_mode, explicit_conv.padding);
+            let kvo = kwd.gen_offset_list(pds.strides());
+
+            let strides_diff = data
+                .strides()
+                .iter()
+                .zip(pds.strides().iter())
+                .map(|(&data_s, &pds_s)| [data_s as u32, pds_s as u32])
+                .collect::<Vec<_>>();
+
+            ctx.compute(&pds, &kvo, &strides_diff);
+        });
     }
 
     // #[test]
