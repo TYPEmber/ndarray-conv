@@ -1,5 +1,6 @@
 use ndarray::{Array, ArrayBase, DataMut, Dim, IntoDimension, Ix, RemoveAxis};
 use num::Complex;
+use rayon::{iter::ParallelIterator, slice::ParallelSliceMut};
 use rustfft::FftNum;
 
 pub struct Processor<T: FftNum> {
@@ -58,13 +59,23 @@ impl<T: FftNum> Processor<T> {
         output_shape[N - 1] = rp.complex_len();
         let mut output = Array::zeros(output_shape);
 
-        for (mut input, mut output) in input.rows_mut().into_iter().zip(output.rows_mut()) {
-            rp.process(
-                input.as_slice_mut().unwrap(),
-                output.as_slice_mut().unwrap(),
-            )
-            .unwrap();
-        }
+        ndarray::Zip::from(input.rows_mut())
+            .and(output.rows_mut())
+            .par_for_each(|mut input, mut output| {
+                rp.process(
+                    input.as_slice_mut().unwrap(),
+                    output.as_slice_mut().unwrap(),
+                )
+                .unwrap();
+            });
+
+        // for (mut input, mut output) in input.rows_mut().into_iter().zip(output.rows_mut()) {
+        //     rp.process(
+        //         input.as_slice_mut().unwrap(),
+        //         output.as_slice_mut().unwrap(),
+        //     )
+        //     .unwrap();
+        // }
 
         let mut axes: [usize; N] = std::array::from_fn(|i| i);
         axes.rotate_right(1);
@@ -86,7 +97,13 @@ impl<T: FftNum> Processor<T> {
             output = unsafe { buffer.assume_init() };
 
             let cp = self.cp.plan_fft_forward(output_shape[N - 1]);
-            cp.process(output.as_slice_mut().unwrap());
+            // cp.process(output.as_slice_mut().unwrap());
+
+            output
+                .as_slice_mut()
+                .unwrap()
+                .par_chunks_exact_mut(output_shape[N - 1])
+                .for_each(|output| cp.process(output));
         }
 
         output
@@ -109,7 +126,13 @@ impl<T: FftNum> Processor<T> {
         axes.rotate_left(1);
         for _ in 0..N - 1 {
             let cp = self.cp.plan_fft_inverse(raw_dim[N - 1]);
-            cp.process(input.as_slice_mut().unwrap());
+            // cp.process(input.as_slice_mut().unwrap());
+
+            input
+                .as_slice_mut()
+                .unwrap()
+                .par_chunks_exact_mut(raw_dim[N - 1])
+                .for_each(|input| cp.process(input));
 
             raw_dim.rotate_left(1);
 
@@ -124,12 +147,21 @@ impl<T: FftNum> Processor<T> {
         output_shape[N - 1] = self.rp_origin_len;
         let mut output = Array::zeros(output_shape);
 
-        for (mut input, mut output) in input.rows_mut().into_iter().zip(output.rows_mut()) {
-            let _ = rp.process(
-                input.as_slice_mut().unwrap(),
-                output.as_slice_mut().unwrap(),
-            );
-        }
+        // for (mut input, mut output) in input.rows_mut().into_iter().zip(output.rows_mut()) {
+        //     let _ = rp.process(
+        //         input.as_slice_mut().unwrap(),
+        //         output.as_slice_mut().unwrap(),
+        //     );
+        // }
+
+        ndarray::Zip::from(input.rows_mut())
+            .and(output.rows_mut())
+            .par_for_each(|mut input, mut output| {
+                let _ = rp.process(
+                    input.as_slice_mut().unwrap(),
+                    output.as_slice_mut().unwrap(),
+                );
+            });
 
         let len = T::from_usize(output.len()).unwrap();
         output.map_mut(|x| *x = x.div(len));

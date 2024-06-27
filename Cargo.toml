@@ -15,6 +15,7 @@ num = "0.4"
 rustfft = "6.2"
 realfft = "3.3"
 thiserror = "1.0"
+rayon = "1.10"
 
 # [dev-dependencies]
 ndarray-rand = "0.14"
