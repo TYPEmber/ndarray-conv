@@ -1,3 +1,9 @@
+//! Provides padding functions for FFT-based convolutions.
+//!
+//! These functions handle padding of input data and kernels to
+//! appropriate sizes for efficient FFT calculations. Padding is
+//! crucial for correctly implementing convolution via FFT.
+
 use std::fmt::Debug;
 
 use ndarray::{
@@ -7,6 +13,22 @@ use num::traits::NumAssign;
 
 use crate::{dilation::KernelWithDilation, padding::PaddingExt, ExplicitPadding, PaddingMode};
 
+/// Pads the input data for FFT-based convolution.
+///
+/// This function takes the input data, padding mode, explicit padding, and desired FFT size
+/// and returns a new array with the appropriate padding applied. The padding is applied
+/// to each dimension according to the specified `padding_mode` and `explicit_padding`.
+///
+/// # Arguments
+///
+/// * `data`: The input data array.
+/// * `padding_mode`: The padding mode to use (e.g., `PaddingMode::Zeros`, `PaddingMode::Reflect`).
+/// * `explicit_padding`: An array specifying the padding for each dimension.
+/// * `fft_size`: The desired size for FFT calculations. The output array will have these dimensions.
+///
+/// # Returns
+///
+/// A new array with the padded data, ready for FFT transformation.
 pub fn data<T, S, const N: usize>(
     data: &ArrayBase<S, Dim<[Ix; N]>>,
     padding_mode: PaddingMode<N, T>,
@@ -41,6 +63,20 @@ where
     buffer
 }
 
+/// Pads the kernel for FFT-based convolution.
+///
+/// This function takes the kernel, expands it with dilations, and pads it with zeros to the
+/// desired FFT size, preparing it for FFT transformation. The kernel is also reversed
+/// in each dimension as required for convolution via FFT.
+///
+/// # Arguments
+///
+/// * `kwd`: The kernel with dilation information.
+/// * `fft_size`: The desired size for FFT calculations. The output array will have these dimensions.
+///
+/// # Returns
+///
+/// A new array with the padded and reversed kernel, ready for FFT transformation.
 pub fn kernel<'a, T, S, const N: usize>(
     kwd: KernelWithDilation<'a, S, N>,
     fft_size: [usize; N],

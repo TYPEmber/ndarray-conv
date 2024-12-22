@@ -1,6 +1,31 @@
+//! Provides functions for padding on a single side of a dimension.
+//!
+//! This module contains functions for applying padding to the front
+//! or back of a specific dimension of an array. These functions are
+//! used internally by the `dim` module and implement the core logic
+//! for different padding modes like constant, replicate, reflect and
+//! circular.
+
 use ndarray::{Array, ArrayBase, Axis, DataMut, Dim, Ix, RemoveAxis};
 use num::traits::NumAssign;
 
+/// Applies constant padding to the front of a given dimension of an array.
+///
+/// This function modifies the input array by padding the front of the
+/// specified dimension with a constant value.
+///
+/// # Type Parameters
+///
+/// * `T`: The numeric type of the array elements.
+/// * `S`: The data storage type of the array.
+/// * `D`: The dimension type of the array.
+///
+/// # Arguments
+///
+/// * `buffer`: A mutable reference to the array to be padded.
+/// * `dim`: The dimension to pad.
+/// * `padding`: An array containing two `usize` values representing padding for front and back, respectively.
+/// * `constant`: The constant value to pad with.
 #[inline]
 pub fn constant_front<T, S, D>(
     buffer: &mut ArrayBase<S, D>,
@@ -23,6 +48,26 @@ pub fn constant_front<T, S, D>(
     }
 }
 
+/// Applies constant padding to the back of a given dimension of an array.
+///
+/// This function modifies the input array by padding the back of the
+/// specified dimension with a constant value.
+///
+/// # Type Parameters
+///
+/// * `N`: The number of dimensions.
+/// * `T`: The numeric type of the array elements.
+/// * `S`: The data storage type of the array.
+/// * `D`: The dimension type of the original data.
+/// * `DO`: The dimension type of the output data.
+///
+/// # Arguments
+///
+/// * `input_dim`: The dimensions of the original array.
+/// * `buffer`: A mutable reference to the array to be padded.
+/// * `dim`: The dimension to pad.
+/// * `padding`: An array containing two `usize` values representing padding for front and back, respectively.
+/// * `constant`: The constant value to pad with.
 #[inline]
 pub fn constant_back<const N: usize, T, S, D, DO>(
     input_dim: D,
@@ -48,6 +93,22 @@ pub fn constant_back<const N: usize, T, S, D, DO>(
     }
 }
 
+/// Applies replicate padding to the front of a given dimension of an array.
+///
+/// This function modifies the input array by padding the front of the
+/// specified dimension by replicating the edge values.
+///
+/// # Type Parameters
+///
+/// * `T`: The numeric type of the array elements.
+/// * `S`: The data storage type of the array.
+/// * `D`: The dimension type of the array.
+///
+/// # Arguments
+///
+/// * `buffer`: A mutable reference to the array to be padded.
+/// * `dim`: The dimension to pad.
+/// * `padding`: An array containing two `usize` values representing padding for front and back, respectively.
 #[inline]
 pub fn replicate_front<T, S, D>(buffer: &mut ArrayBase<S, D>, dim: usize, padding: [usize; 2])
 where
@@ -67,6 +128,25 @@ where
     }
 }
 
+/// Applies replicate padding to the back of a given dimension of an array.
+///
+/// This function modifies the input array by padding the back of the
+/// specified dimension by replicating the edge values.
+///
+/// # Type Parameters
+///
+/// * `N`: The number of dimensions.
+/// * `T`: The numeric type of the array elements.
+/// * `S`: The data storage type of the array.
+/// * `D`: The dimension type of the original data.
+/// * `DO`: The dimension type of the output data.
+///
+/// # Arguments
+///
+/// * `input_dim`: The dimensions of the original array.
+/// * `buffer`: A mutable reference to the array to be padded.
+/// * `dim`: The dimension to pad.
+/// * `padding`: An array containing two `usize` values representing padding for front and back, respectively.
 #[inline]
 pub fn replicate_back<const N: usize, T, S, D, DO>(
     input_dim: D,
@@ -92,6 +172,22 @@ pub fn replicate_back<const N: usize, T, S, D, DO>(
     }
 }
 
+/// Applies reflect padding to the front of a given dimension of an array.
+///
+/// This function modifies the input array by padding the front of the
+/// specified dimension by reflecting the array at the boundaries.
+///
+/// # Type Parameters
+///
+/// * `T`: The numeric type of the array elements.
+/// * `S`: The data storage type of the array.
+/// * `D`: The dimension type of the array.
+///
+/// # Arguments
+///
+/// * `buffer`: A mutable reference to the array to be padded.
+/// * `dim`: The dimension to pad.
+/// * `padding`: An array containing two `usize` values representing padding for front and back, respectively.
 #[inline]
 pub fn reflect_front<T, S, D>(buffer: &mut ArrayBase<S, D>, dim: usize, padding: [usize; 2])
 where
@@ -114,6 +210,25 @@ where
     }
 }
 
+/// Applies reflect padding to the back of a given dimension of an array.
+///
+/// This function modifies the input array by padding the back of the
+/// specified dimension by reflecting the array at the boundaries.
+///
+/// # Type Parameters
+///
+/// * `N`: The number of dimensions.
+/// * `T`: The numeric type of the array elements.
+/// * `S`: The data storage type of the array.
+/// * `D`: The dimension type of the original data.
+/// * `DO`: The dimension type of the output data.
+///
+/// # Arguments
+///
+/// * `input_dim`: The dimensions of the original array.
+/// * `buffer`: A mutable reference to the array to be padded.
+/// * `dim`: The dimension to pad.
+/// * `padding`: An array containing two `usize` values representing padding for front and back, respectively.
 #[inline]
 pub fn reflect_back<const N: usize, T, S, D, DO>(
     input_dim: D,
@@ -142,6 +257,22 @@ pub fn reflect_back<const N: usize, T, S, D, DO>(
     }
 }
 
+/// Applies circular padding to the front of a given dimension of an array.
+///
+/// This function modifies the input array by padding the front of the
+/// specified dimension by wrapping the data around the boundaries.
+///
+/// # Type Parameters
+///
+/// * `T`: The numeric type of the array elements.
+/// * `S`: The data storage type of the array.
+/// * `D`: The dimension type of the array.
+///
+/// # Arguments
+///
+/// * `buffer`: A mutable reference to the array to be padded.
+/// * `dim`: The dimension to pad.
+/// * `padding`: An array containing two `usize` values representing padding for front and back, respectively.
 #[inline]
 pub fn circular_front<T, S, D>(buffer: &mut ArrayBase<S, D>, dim: usize, padding: [usize; 2])
 where
@@ -164,6 +295,25 @@ where
     }
 }
 
+/// Applies circular padding to the back of a given dimension of an array.
+///
+/// This function modifies the input array by padding the back of the
+/// specified dimension by wrapping the data around the boundaries.
+///
+/// # Type Parameters
+///
+/// * `N`: The number of dimensions.
+/// * `T`: The numeric type of the array elements.
+/// * `S`: The data storage type of the array.
+/// * `D`: The dimension type of the original data.
+/// * `DO`: The dimension type of the output data.
+///
+/// # Arguments
+///
+/// * `input_dim`: The dimensions of the original array.
+/// * `buffer`: A mutable reference to the array to be padded.
+/// * `dim`: The dimension to pad.
+/// * `padding`: An array containing two `usize` values representing padding for front and back, respectively.
 #[inline]
 pub fn circular_back<const N: usize, T, S, D, DO>(
     input_dim: D,

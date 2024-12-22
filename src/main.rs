@@ -1,5 +1,8 @@
 use num::complex::ComplexFloat;
 
+/// A simple example and test program demonstrating convolution operations
+/// using the `ndarray-conv` crate. It performs both standard and FFT-based
+/// convolutions and compares their results for correctness.
 fn main() {
     use ndarray::prelude::*;
     use ndarray_conv::*;
@@ -18,12 +21,12 @@ fn main() {
             // let k = Array::random(200, Uniform::new(0f32, 1.));
 
             let now = Instant::now();
-            let a = x.conv(k.with_dilation(2), ConvMode::Same, PaddingMode::Zeros).unwrap();
-            let b = x.conv_fft(
-                k.with_dilation(2),
-                ConvMode::Same,
-                PaddingMode::Zeros,
-            ).unwrap();
+            let a = x
+                .conv(k.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
+                .unwrap();
+            let b = x
+                .conv_fft(k.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
+                .unwrap();
 
             // dbg!(a.shape(), b.shape());
 

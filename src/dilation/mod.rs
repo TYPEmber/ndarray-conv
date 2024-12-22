@@ -1,5 +1,8 @@
+//! Provides functionality for kernel dilation.
+
 use ndarray::{ArrayBase, Data, Dim, Dimension, IntoDimension, Ix, RawData};
 
+/// Represents a kernel along with its dilation factors for each dimension.
 pub struct KernelWithDilation<'a, S: RawData, const N: usize> {
     pub kernel: &'a ArrayBase<S, Dim<[Ix; N]>>,
     pub dilation: [usize; N],
@@ -11,6 +14,18 @@ where
     S: Data<Elem = T>,
     Dim<[Ix; N]>: Dimension,
 {
+    /// Generates a list of offsets and corresponding kernel values for efficient convolution.
+    ///
+    /// This method calculates the offsets into the input array that need to be accessed
+    /// during the convolution operation, taking into account the kernel's dilation.
+    /// It filters out elements where the kernel value is zero to optimize the computation.
+    ///
+    /// # Arguments
+    ///
+    /// * `pds_strides`: The strides of the padded input array.
+    ///
+    /// # Returns
+    /// A `Vec` of tuples, where each tuple contains an offset and the corresponding kernel value.
     pub fn gen_offset_list(&self, pds_strides: &[isize]) -> Vec<(isize, T)> {
         let strides: [isize; N] =
             std::array::from_fn(|i| self.dilation[i] as isize * pds_strides[i]);
@@ -49,6 +64,7 @@ impl<'a, S: RawData, const N: usize> From<&'a ArrayBase<S, Dim<[Ix; N]>>>
     }
 }
 
+/// Trait for converting a value into a dilation array.
 pub trait IntoDilation<const N: usize> {
     fn into_dilation(self) -> [usize; N];
 }
@@ -67,6 +83,7 @@ impl<const N: usize> IntoDilation<N> for [usize; N] {
     }
 }
 
+/// Trait for adding dilation information to a kernel.
 pub trait WithDilation<S: RawData, const N: usize> {
     fn with_dilation(&self, dilation: impl IntoDilation<N>) -> KernelWithDilation<S, N>;
 }
@@ -81,6 +98,7 @@ impl<S: RawData, const N: usize> WithDilation<S, N> for ArrayBase<S, Dim<[Ix; N]
     }
 }
 
+/// Trait for converting a reference to a `KernelWithDilation`.
 pub trait IntoKernelWithDilation<'a, S: RawData, const N: usize> {
     fn into_kernel_with_dilation(self) -> KernelWithDilation<'a, S, N>;
 }
