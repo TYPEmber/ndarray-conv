@@ -125,6 +125,7 @@ fftconvolve_3d          time:   [11.991 ms 12.009 ms 12.031 ms]
 ```
 
 ## Versions
+- 0.3.4 - Bug fix: fix unsafe type cast in circular padding.
 - 0.3.3 - Bug fix: correct conv_fft's output shape.
 - 0.3.2 - Improve performance, by modifying `good_fft_size` and `transpose`.
 - 0.3.1 - Impl basic error type. Fix some bugs.
