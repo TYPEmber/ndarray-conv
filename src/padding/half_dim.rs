@@ -181,7 +181,7 @@ pub fn circular_back<const N: usize, T, S, D, DO>(
     for j in input_dim[dim] + padding[0]..buffer.raw_dim()[dim] {
         let circular_j = padding[0] + (j - border_index - 1);
         unsafe {
-            let output_mut = (buffer as *const _ as *mut Array<T, Dim<[Ix; N]>>)
+            let output_mut = (buffer as *const _ as *mut ArrayBase<S, DO>)
                 .as_mut()
                 .unwrap();
 

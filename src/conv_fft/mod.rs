@@ -345,4 +345,23 @@ mod tests {
 
         assert_eq!(res_normal, res_fft);
     }
+
+    #[test]
+    fn test_conv_fft_circular() {
+        use crate::*;
+        use ndarray::Array1;
+
+        let arr: Array1<f32> =
+            array![0.0, 0.1, 0.3, 0.4, 0.0, 0.1, 0.3, 0.4, 0.0, 0.1, 0.3, 0.4, 0.0, 0.1, 0.3, 0.4];
+        let kernel: Array1<f32> = array![0.1, 0.3, 0.6, 0.3, 0.1];
+
+        arr.conv(&kernel, crate::ConvMode::Same, crate::PaddingMode::Circular)
+            .unwrap()
+            .iter()
+            .zip(
+                arr.conv_fft(&kernel, crate::ConvMode::Same, crate::PaddingMode::Circular)
+                    .unwrap(),
+            )
+            .for_each(|(a, b)| assert!((a - b).abs() < 1e-6));
+    }
 }
