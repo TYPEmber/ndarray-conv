@@ -5,6 +5,7 @@ use ndarray_conv::*;
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 use ndarray_vision::processing::ConvolutionExt;
 
+/// Benchmark for 1D convolution using `conv_fft` with various libraries.
 fn criterion_benchmark(c: &mut Criterion) {
     let x = Array::random(5000, Uniform::new(0f32, 1.));
     let k = Array::random(31, Uniform::new(0f32, 1.));
@@ -37,10 +38,12 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut fft_processor = FftProcessor::default();
 
+    /// Benchmark for 1D convolution using `conv_fft`.
     c.bench_function("fft_1d", |b| {
         b.iter(|| x.conv_fft(&k, ConvMode::Same, PaddingMode::Zeros))
     });
 
+    /// Benchmark for 1D convolution using `conv_fft_with_processor`.
     c.bench_function("fft_with_processor_1d", |b| {
         b.iter(|| {
             x.conv_fft_with_processor(&k, ConvMode::Same, PaddingMode::Zeros, &mut fft_processor)
@@ -85,10 +88,12 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut fft_processor = FftProcessor::default();
 
+    /// Benchmark for 2D convolution using `conv_fft`.
     c.bench_function("fft_2d", |b| {
         b.iter(|| x.conv_fft(&k, ConvMode::Same, PaddingMode::Zeros))
     });
 
+    /// Benchmark for 2D convolution using `conv_fft_with_processor`.
     c.bench_function("fft_with_processor_2d", |b| {
         b.iter(|| {
             x.conv_fft_with_processor(&k, ConvMode::Same, PaddingMode::Zeros, &mut fft_processor)
@@ -134,10 +139,12 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let mut fft_processor = FftProcessor::default();
 
+    /// Benchmark for 3D convolution using `conv_fft`.
     c.bench_function("fft_3d", |b| {
         b.iter(|| x.conv_fft(&k, ConvMode::Same, PaddingMode::Zeros))
     });
 
+    /// Benchmark for 3D convolution using `conv_fft_with_processor`.
     c.bench_function("fft_with_processor_3d", |b| {
         b.iter(|| {
             x.conv_fft_with_processor(&k, ConvMode::Same, PaddingMode::Zeros, &mut fft_processor)

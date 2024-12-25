@@ -1,3 +1,10 @@
+//! Provides padding functionality for ndarray arrays.
+//!
+//! This module defines the `PaddingExt` trait, which extends the `ArrayBase`
+//! struct from the `ndarray` crate with methods for padding arrays using
+//! different padding modes. It also provides helper functions for
+//! applying specific types of padding.
+
 use super::{BorderType, PaddingMode};
 
 use ndarray::{
@@ -9,10 +16,49 @@ use num::traits::NumAssign;
 pub(crate) mod dim;
 mod half_dim;
 
+/// Represents explicit padding sizes for each dimension.
 pub type ExplicitPadding<const N: usize> = [[usize; 2]; N];
 
+/// Extends `ndarray`'s `ArrayBase` with padding operations.
+///
+/// This trait provides the `padding` and `padding_in` methods for adding
+/// padding to an array using various modes, like zero padding, constant
+/// padding, replication, reflection, and circular padding.
+///
+/// # Type Parameters
+///
+/// *   `N`: The number of dimensions of the array.
+/// *   `T`: The numeric type of the array elements.
+/// *   `Output`: The type of the padded array returned by `padding`, typically an `Array<T, Dim<[Ix; N]>>`.
 pub trait PaddingExt<const N: usize, T: num::traits::NumAssign + Copy, Output> {
+    /// Returns a new array with the specified padding applied.
+    ///
+    /// This method creates a new array with the dimensions and padding specified by
+    /// `mode` and `padding_size`. It calls the `padding_in` method internally to handle the padding itself.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode`: The padding mode (`Zeros`, `Const`, `Reflect`, `Replicate`, `Circular`, `Custom`, `Explicit`).
+    /// * `padding_size`: An array representing the padding sizes for each dimension in the form `[[front, back]; N]`.
+    ///
+    /// # Returns
+    /// A new `Array` with the padded data.
     fn padding(&self, mode: PaddingMode<N, T>, padding_size: ExplicitPadding<N>) -> Output;
+
+    /// Modifies the buffer in-place by applying padding using the specified mode.
+    ///
+    /// This method directly modifies the provided buffer by adding padding to its content.
+    ///
+    /// # Type Parameters
+    ///
+    /// *   `SO`: The data storage type of the output buffer.
+    /// *   `DO`: The dimension type of the output buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `buffer`: A mutable reference to the array to be padded.
+    /// * `mode`: The padding mode (`Zeros`, `Const`, `Reflect`, `Replicate`, `Circular`, `Custom`, `Explicit`).
+    /// * `padding_size`: An array representing the padding sizes for each dimension in the form `[[front, back]; N]`.
     fn padding_in<SO: DataMut<Elem = T>, DO: RemoveAxis>(
         &self,
         buffer: &mut ArrayBase<SO, DO>,
@@ -107,6 +153,25 @@ where
     }
 }
 
+/// Applies padding using a constant value to the specified slice of the output array.
+///
+/// This function copies the input array to a specific slice of the output array, leaving the rest of the
+/// output array with the default padding value, which is typically a zero or a constant, depending on the padding mode.
+///
+/// # Type Parameters
+///
+/// *   `N`: The number of dimensions of the array.
+/// *   `T`: The numeric type of the array elements.
+/// *   `S`: The data storage type of the input array.
+/// *   `D`: The dimension type of the input array.
+/// *   `SO`: The data storage type of the output array.
+/// *   `DO`: The dimension type of the output array.
+///
+/// # Arguments
+///
+/// * `input`: The input array to pad.
+/// * `output`: A mutable reference to the array where the padded result will be stored.
+/// * `explicit_padding`: An array representing the padding sizes for each dimension in the form `[[front, back]; N]`.
 pub(crate) fn padding_const<const N: usize, T, S, D, SO, DO>(
     input: &ArrayBase<S, D>,
     output: &mut ArrayBase<SO, DO>,
@@ -134,6 +199,25 @@ pub(crate) fn padding_const<const N: usize, T, S, D, SO, DO>(
     output_slice.assign(input);
 }
 
+/// Applies replicate padding to the specified slice of the output array.
+///
+/// This function uses the `dim::replicate` function to add replicate padding
+/// to each dimension of the output array.
+///
+/// # Type Parameters
+///
+/// *   `N`: The number of dimensions of the array.
+/// *   `T`: The numeric type of the array elements.
+/// *   `S`: The data storage type of the input array.
+/// *   `D`: The dimension type of the input array.
+/// *   `SO`: The data storage type of the output array.
+/// *   `DO`: The dimension type of the output array.
+///
+/// # Arguments
+///
+/// * `input`: The input array to pad.
+/// * `output`: A mutable reference to the array where the padded result will be stored.
+/// * `explicit_padding`: An array representing the padding sizes for each dimension in the form `[[front, back]; N]`.
 fn padding_replicate<const N: usize, T, S, D, SO, DO>(
     input: &ArrayBase<S, D>,
     output: &mut ArrayBase<SO, DO>,
@@ -156,6 +240,25 @@ fn padding_replicate<const N: usize, T, S, D, SO, DO>(
         });
 }
 
+/// Applies reflect padding to the specified slice of the output array.
+///
+/// This function uses the `dim::reflect` function to add reflect padding
+/// to each dimension of the output array.
+///
+/// # Type Parameters
+///
+/// *   `N`: The number of dimensions of the array.
+/// *   `T`: The numeric type of the array elements.
+/// *   `S`: The data storage type of the input array.
+/// *   `D`: The dimension type of the input array.
+/// *   `SO`: The data storage type of the output array.
+/// *   `DO`: The dimension type of the output array.
+///
+/// # Arguments
+///
+/// * `input`: The input array to pad.
+/// * `output`: A mutable reference to the array where the padded result will be stored.
+/// * `explicit_padding`: An array representing the padding sizes for each dimension in the form `[[front, back]; N]`.
 fn padding_reflect<const N: usize, T, S, D, SO, DO>(
     input: &ArrayBase<S, D>,
     output: &mut ArrayBase<SO, DO>,
@@ -178,6 +281,25 @@ fn padding_reflect<const N: usize, T, S, D, SO, DO>(
         });
 }
 
+/// Applies circular padding to the specified slice of the output array.
+///
+/// This function uses the `dim::circular` function to add circular padding
+/// to each dimension of the output array.
+///
+/// # Type Parameters
+///
+/// *   `N`: The number of dimensions of the array.
+/// *   `T`: The numeric type of the array elements.
+/// *   `S`: The data storage type of the input array.
+/// *   `D`: The dimension type of the input array.
+/// *   `SO`: The data storage type of the output array.
+/// *   `DO`: The dimension type of the output array.
+///
+/// # Arguments
+///
+/// * `input`: The input array to pad.
+/// * `output`: A mutable reference to the array where the padded result will be stored.
+/// * `explicit_padding`: An array representing the padding sizes for each dimension in the form `[[front, back]; N]`.
 fn padding_circular<const N: usize, T, S, D, SO, DO>(
     input: &ArrayBase<S, D>,
     output: &mut ArrayBase<SO, DO>,
@@ -200,6 +322,27 @@ fn padding_circular<const N: usize, T, S, D, SO, DO>(
         });
 }
 
+/// Applies custom padding to the specified slice of the output array using `BorderType` for each dimension.
+///
+/// This function uses the `dim::constant`, `dim::reflect`, `dim::replicate`,
+/// or `dim::circular` function based on the corresponding `BorderType` specified in the `borders` argument,
+/// to add padding to each dimension of the output array.
+///
+/// # Type Parameters
+///
+/// *   `N`: The number of dimensions of the array.
+/// *   `T`: The numeric type of the array elements.
+/// *   `S`: The data storage type of the input array.
+/// *   `D`: The dimension type of the input array.
+/// *   `SO`: The data storage type of the output array.
+/// *   `DO`: The dimension type of the output array.
+///
+/// # Arguments
+///
+/// * `input`: The input array to pad.
+/// * `output`: A mutable reference to the array where the padded result will be stored.
+/// * `explicit_padding`: An array representing the padding sizes for each dimension in the form `[[front, back]; N]`.
+/// * `borders`: An array containing a `BorderType` enum for each dimension.
 fn padding_custom<const N: usize, T, S, D, SO, DO>(
     input: &ArrayBase<S, D>,
     output: &mut ArrayBase<SO, DO>,
@@ -232,6 +375,29 @@ fn padding_custom<const N: usize, T, S, D, SO, DO>(
         });
 }
 
+/// Applies explicit padding to the specified slice of the output array using `BorderType` for each side of each dimension.
+///
+/// This function uses the `half_dim::constant_front`, `half_dim::constant_back`,
+/// `half_dim::reflect_front`, `half_dim::reflect_back`, `half_dim::replicate_front`,
+/// `half_dim::replicate_back`, `half_dim::circular_front`, and `half_dim::circular_back`
+/// functions based on the corresponding `BorderType` specified in the `borders` argument,
+/// to add padding to each dimension of the output array.
+///
+/// # Type Parameters
+///
+/// *   `N`: The number of dimensions of the array.
+/// *   `T`: The numeric type of the array elements.
+/// *   `S`: The data storage type of the input array.
+/// *   `D`: The dimension type of the input array.
+/// *   `SO`: The data storage type of the output array.
+/// *   `DO`: The dimension type of the output array.
+///
+/// # Arguments
+///
+/// * `input`: The input array to pad.
+/// * `output`: A mutable reference to the array where the padded result will be stored.
+/// * `explicit_padding`: An array representing the padding sizes for each dimension in the form `[[front, back]; N]`.
+/// * `borders`: An array containing an array of two `BorderType` enums for each dimension.
 fn padding_explicit<const N: usize, T, S, D, SO, DO>(
     input: &ArrayBase<S, D>,
     output: &mut ArrayBase<SO, DO>,
