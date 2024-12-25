@@ -52,7 +52,7 @@
 //! # Choosing a convolution method
 //!
 //!  * Use [`ConvExt::conv`] for standard convolution
-//!  * Use [`ConvFFTExt::conv_fft`] for FFT accelerated convolution
+//!  * Use [`ConvFFTExt::conv_fft`] for FFT accelerated convolution.
 //!    FFT accelerated convolution is generally faster for larger kernels, but
 //!    standard convolution may be faster for smaller kernels.
 //!

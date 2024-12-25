@@ -247,6 +247,6 @@ let float_array = int_array.map(|&x| x as f32);
 *   **Rust Docs:** Once published to crates.io, you can find detailed API documentation on docs.rs.
 *   **Test Cases:** The `tests` modules within the source code provide further examples of how to use the library.
 
-## #12. How does `ndarray-conv` compare to other convolution libraries?
+### 12. How does `ndarray-conv` compare to other convolution libraries?
 
 The `ndarray-conv` project includes benchmarks comparing its performance to libraries like `tch` (LibTorch/PyTorch), `ndarray-vision`, and `fftconvolve`. `ndarray-conv` is generally competitive and often outperforms these other libraries, especially when using `conv_fft_with_processor` for repeated convolutions.
