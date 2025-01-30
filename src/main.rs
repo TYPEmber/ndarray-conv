@@ -17,7 +17,7 @@ fn main() {
     // get_gpu();
     test_gpu();
 
-    let mut p = FftProcessor::default();
+    // let mut p = FftProcessor::default();
 
     let mut small_duration = 0u128;
     let test_cycles_small = 250;
