@@ -1,3 +1,8 @@
+//! Provides FFT-accelerated convolution operations.
+//!
+//! This module offers the `ConvFFTExt` trait, which extends `ndarray`
+//! with FFT-based convolution methods.
+
 use std::{fmt::Debug, marker::PhantomData};
 
 use ndarray::{
@@ -15,6 +20,12 @@ mod padding;
 
 pub use fft::Processor;
 
+/// Represents a "baked" convolution operation.
+///
+/// This struct holds pre-computed data for performing FFT-accelerated
+/// convolutions, including the FFT size, FFT processor, scratch space,
+/// and padding information. It's designed to optimize repeated
+/// convolutions with the same kernel and settings.
 pub struct Baked<T, SK, const N: usize>
 where
     T: NumAssign + Debug + FftNum,
@@ -31,6 +42,38 @@ where
     _sk_hint: PhantomData<SK>,
 }
 
+/// Extends `ndarray`'s `ArrayBase` with FFT-accelerated convolution operations.
+///
+/// This trait adds the `conv_fft` and `conv_fft_with_processor` methods to `ArrayBase`,
+/// enabling efficient FFT-based convolutions on N-dimensional arrays.
+///
+/// # Type Parameters
+///
+/// *   `T`: The numeric type of the array elements. Must be a floating-point type that implements `FftNum`.
+/// *   `S`: The data storage type of the input array.
+/// *   `SK`: The data storage type of the kernel array.
+///
+/// # Methods
+///
+/// *   `conv_fft`: Performs an FFT-accelerated convolution with default settings.
+/// *   `conv_fft_with_processor`: Performs an FFT-accelerated convolution using a provided `Processor` instance, allowing for reuse of FFT plans and scratch space.
+/// *   `conv_fft_bake`: Precomputes and stores necessary data for performing repeated convolutions in the form of `Baked`.
+/// *   `conv_fft_with_baked`: Performs a convolution with the provided `Baked` data.
+///
+/// # Example
+///
+/// ```rust
+/// use ndarray::prelude::*;
+/// use ndarray_conv::{ConvFFTExt, ConvMode, PaddingMode};
+///
+/// let arr = array![[1., 2.], [3., 4.]];
+/// let kernel = array![[1., 0.], [0., 1.]];
+/// let result = arr.conv_fft(&kernel, ConvMode::Same, PaddingMode::Zeros).unwrap();
+/// ```
+///
+/// # Notes
+///
+/// FFT-based convolutions are generally faster for larger kernels but may have higher overhead for smaller kernels.
 pub trait ConvFFTExt<'a, T, S, SK, const N: usize>
 where
     T: FftNum + NumAssign,
@@ -251,6 +294,7 @@ mod tests {
 
         let res_fft = arr
             .map(|&x| x as f64)
+            // The padding does not matter here, it is only used to calculate the correct size
             .conv_fft(
                 &kernel.map(|&x| x as f64),
                 ConvMode::Same,
@@ -344,5 +388,24 @@ mod tests {
         // dbg!(res_fft);
 
         assert_eq!(res_normal, res_fft);
+    }
+
+    #[test]
+    fn test_conv_fft_circular() {
+        use crate::*;
+        use ndarray::Array1;
+
+        let arr: Array1<f32> =
+            array![0.0, 0.1, 0.3, 0.4, 0.0, 0.1, 0.3, 0.4, 0.0, 0.1, 0.3, 0.4, 0.0, 0.1, 0.3, 0.4];
+        let kernel: Array1<f32> = array![0.1, 0.3, 0.6, 0.3, 0.1];
+
+        arr.conv(&kernel, crate::ConvMode::Same, crate::PaddingMode::Circular)
+            .unwrap()
+            .iter()
+            .zip(
+                arr.conv_fft(&kernel, crate::ConvMode::Same, crate::PaddingMode::Circular)
+                    .unwrap(),
+            )
+            .for_each(|(a, b)| assert!((a - b).abs() < 1e-6));
     }
 }

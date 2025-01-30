@@ -1,7 +1,13 @@
+//! Provides FFT-related functionality for convolution operations.
+//!
+//! This module includes the `Processor` struct, which manages FFT
+//! planning and execution using `rustfft` and `realfft` crates.
+
 use ndarray::{Array, ArrayBase, DataMut, Dim, IntoDimension, Ix, RemoveAxis};
 use num::Complex;
 use rustfft::FftNum;
 
+/// Manages FFT planning and execution for convolution operations.
 pub struct Processor<T: FftNum> {
     rp: realfft::RealFftPlanner<T>,
     rp_origin_len: usize,
@@ -19,6 +25,14 @@ impl<T: FftNum> Default for Processor<T> {
 }
 
 impl<T: FftNum> Processor<T> {
+    /// Creates a scratch buffer for FFT operations.
+    ///
+    /// This method calculates the required size for the scratch buffer based on
+    /// the input dimensions and creates a vector with uninitialized memory to use
+    /// as the scratch buffer for the real and complex FFTs.
+    ///
+    /// # Arguments
+    ///
     #[allow(clippy::uninit_vec)]
     pub fn get_scratch<const N: usize>(&mut self, input_dim: [usize; N]) -> Vec<Complex<T>> {
         // needs to check backward len
@@ -41,6 +55,15 @@ impl<T: FftNum> Processor<T> {
         scratch
     }
 
+    /// Performs a forward FFT on the given input array.
+    ///
+    /// This method computes the forward Fast Fourier Transform of the input array using
+    /// a real-to-complex FFT in the last dimension and complex-to-complex FFTs in the other dimensions.
+    ///
+    /// # Arguments
+    ///
+    /// *   `input`: A mutable reference to the input array.
+    ///
     pub fn forward<S: DataMut<Elem = T>, const N: usize>(
         &mut self,
         input: &mut ArrayBase<S, Dim<[Ix; N]>>,
@@ -112,6 +135,14 @@ impl<T: FftNum> Processor<T> {
         output
     }
 
+    /// Performs an inverse FFT on the given input array.
+    ///
+    /// This method computes the inverse Fast Fourier Transform of the input array using
+    /// a complex-to-real FFT in the last dimension and complex-to-complex FFTs in the other dimensions.
+    ///
+    /// # Arguments
+    ///
+    /// *   `input`: The input array.
     pub fn backward<const N: usize>(
         &mut self,
         mut input: Array<Complex<T>, Dim<[Ix; N]>>,
@@ -173,6 +204,16 @@ impl<T: FftNum> Processor<T> {
         output
     }
 
+    /// Performs a forward FFT on the given input array using a scratch buffer.
+    ///
+    /// This method computes the forward Fast Fourier Transform of the input array using
+    /// a real-to-complex FFT in the last dimension and complex-to-complex FFTs in the other dimensions.
+    /// It uses the given scratch buffer for FFT calculations, potentially improving performance
+    /// for multiple FFT calls.
+    ///
+    /// # Arguments
+    ///
+    /// *   `input`: A mutable reference to the input array.
     pub fn forward_with_scratch<S: DataMut<Elem = T>, const N: usize>(
         &mut self,
         input: &mut ArrayBase<S, Dim<[Ix; N]>>,
@@ -226,6 +267,16 @@ impl<T: FftNum> Processor<T> {
         output
     }
 
+    /// Performs an inverse FFT on the given input array using a scratch buffer.
+    ///
+    /// This method computes the inverse Fast Fourier Transform of the input array using
+    /// a complex-to-real FFT in the last dimension and complex-to-complex FFTs in the other dimensions.
+    /// It uses the given scratch buffer for FFT calculations, potentially improving performance
+    /// for multiple FFT calls.
+    ///
+    /// # Arguments
+    ///
+    /// *   `input`: The input array.
     pub fn backward_with_scratch<const N: usize>(
         &mut self,
         mut input: Array<Complex<T>, Dim<[Ix; N]>>,

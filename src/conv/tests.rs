@@ -2,6 +2,7 @@ use super::*;
 use crate::dilation::WithDilation;
 use ndarray::prelude::*;
 
+/// Tests the `conv` function with a 2D array and a kernel.
 #[test]
 fn tch_conv2d() {
     // let a = vec![1, 2, 3];
@@ -31,6 +32,7 @@ fn tch_conv2d() {
     dbg!(res);
 }
 
+/// Tests basic convolution operations with various parameters.
 #[test]
 fn test_conv() {
     let arr = array![[1, 2], [3, 4]];
@@ -91,6 +93,7 @@ fn test_conv() {
     dbg!(res);
 }
 
+/// Tests if the convolution result aligns with LibTorch
 #[test]
 fn aligned_with_libtorch() {
     let tensor = tch::Tensor::from_slice(&[1, 2, 3, 4, 5, 6])

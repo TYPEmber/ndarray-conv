@@ -1,3 +1,6 @@
+//! Provides convolution operations for `ndarray` arrays.
+//! Includes standard convolution and related utilities.
+
 use std::fmt::Debug;
 
 use ndarray::{
@@ -15,6 +18,10 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
+/// Represents explicit convolution parameters after unfolding from `ConvMode`.
+///
+/// This struct holds padding and strides information used directly
+/// by the convolution algorithm.
 pub struct ExplicitConv<const N: usize> {
     pub padding: [[usize; 2]; N],
     pub strides: [usize; N],
@@ -60,12 +67,35 @@ impl<const N: usize> ConvMode<N> {
     }
 }
 
+/// Extends `ndarray`'s `ArrayBase` with convolution operations.
+///
+/// This trait adds the `conv` method to `ArrayBase`, enabling
+/// standard convolution operations on N-dimensional arrays.
+///
+/// # Type Parameters
+///
+/// *   `T`: The numeric type of the array elements.
+/// *   `S`: The data storage type of the input array.
+/// *   `SK`: The data storage type of the kernel array.
 pub trait ConvExt<'a, T, S, SK, const N: usize>
 where
     T: NumAssign + Copy,
     S: RawData,
     SK: RawData,
 {
+    /// Performs a standard convolution operation.
+    ///
+    /// This method convolves the input array with a given kernel,
+    /// using the specified convolution mode and padding.
+    ///
+    /// # Arguments
+    ///
+    /// *   `kernel`: The convolution kernel.
+    /// *   `conv_mode`: The convolution mode (`Full`, `Same`, `Valid`, `Custom`, `Explicit`).
+    /// *   `padding_mode`: The padding mode (`Zeros`, `Const`, `Reflect`, `Replicate`, `Circular`, `Custom`, `Explicit`).
+    ///
+    /// # Returns
+    ///
     fn conv(
         &self,
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
