@@ -59,35 +59,31 @@ x_3d.map(|&x| x as f32)
 ```
 
 ```rust
-fn main() {
-    use ndarray_conv::*;
-    use ndarray::prelude::*;
-    use ndarray_rand::rand_distr::Uniform;
-    use ndarray_rand::RandomExt;
-    use std::time::Instant;
+// Example for thin wrapper
+use ndarray::{
+    array, Array, ArrayView, Dim, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem,
+};
+use ndarray_conv::*;
 
-    let mut small_duration = 0u128;
-    let test_cycles_small = 1;
-    // small input data
-    for _ in 0..test_cycles_small {
-        let x = Array::random((2000, 4000), Uniform::new(0., 1.));
-        let k = Array::random((9, 9), Uniform::new(0., 1.));
+pub fn fftconvolve<'a, T, const N: usize>(
+    in1: impl Into<ArrayView<'a, T, Dim<[Ix; N]>>>,
+    in2: impl Into<ArrayView<'a, T, Dim<[Ix; N]>>>,
+) -> Array<T, Dim<[Ix; N]>>
+where
+    T: num::traits::NumAssign + rustfft::FftNum,
+    Dim<[Ix; N]>: RemoveAxis,
+    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
+    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
+        SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
+{
+    in1.into()
+        .conv_fft(&in2.into(), ConvMode::Full, PaddingMode::Zeros)
+        .unwrap()
+}
 
-        let now = Instant::now();
-        // or use x.conv_fft() for large input data
-        x.conv(
-            &k,
-            ConvMode::Same,
-            PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
-        );
-        small_duration += now.elapsed().as_nanos();
-    }
-
-    println!(
-        "Time for small arrays, {} iterations: {} milliseconds",
-        test_cycles_small,
-        small_duration / 1_000_000
-    );
+fn test() {
+    let o0 = fftconvolve(&[1., 2.], &array![1., 3., 7.]);
+    let o1 = fftconvolve(&vec![1., 2.], &[1., 3., 7.]);
 }
 ```
 
