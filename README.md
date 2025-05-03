@@ -121,6 +121,8 @@ fftconvolve_3d          time:   [11.991 ms 12.009 ms 12.031 ms]
 ```
 
 ## Versions
+- 0.4.2 - Remove `Debug` trait on `T`.
+- 0.4.1 - Doc update.
 - 0.4.0 - Dependency update: update ndarray from 0.15 to 0.16.
 - 0.3.4 - Bug fix: fix unsafe type cast in circular padding.
 - 0.3.3 - Bug fix: correct conv_fft's output shape.
