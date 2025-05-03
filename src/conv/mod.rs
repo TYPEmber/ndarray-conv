@@ -106,7 +106,7 @@ where
 
 impl<'a, T, S, SK, const N: usize> ConvExt<'a, T, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
 where
-    T: NumAssign + Copy + Debug,
+    T: NumAssign + Copy,
     S: Data<Elem = T> + 'a,
     SK: Data<Elem = T> + 'a,
     Dim<[Ix; N]>: RemoveAxis,

@@ -107,7 +107,7 @@ where
 
 impl<'a, T, S, SK, const N: usize> ConvFFTExt<'a, T, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
 where
-    T: NumAssign + Debug + FftNum,
+    T: NumAssign + FftNum,
     S: Data<Elem = T> + 'a,
     SK: Data<Elem = T> + 'a,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
