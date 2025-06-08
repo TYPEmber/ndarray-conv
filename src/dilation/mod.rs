@@ -1,11 +1,14 @@
 //! Provides functionality for kernel dilation.
 
-use ndarray::{ArrayBase, Data, Dim, Dimension, IntoDimension, Ix, RawData};
+use ndarray::{
+    ArrayBase, Data, Dim, Dimension, IntoDimension, Ix, RawData, SliceArg, SliceInfo, SliceInfoElem,
+};
 
 /// Represents a kernel along with its dilation factors for each dimension.
 pub struct KernelWithDilation<'a, S: RawData, const N: usize> {
     pub kernel: &'a ArrayBase<S, Dim<[Ix; N]>>,
     pub dilation: [usize; N],
+    pub reverse: bool,
 }
 
 impl<'a, S: RawData, const N: usize, T> KernelWithDilation<'a, S, N>
@@ -13,6 +16,8 @@ where
     T: num::traits::NumAssign + Copy,
     S: Data<Elem = T>,
     Dim<[Ix; N]>: Dimension,
+    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
+        SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
 {
     /// Generates a list of offsets and corresponding kernel values for efficient convolution.
     ///
@@ -27,10 +32,19 @@ where
     /// # Returns
     /// A `Vec` of tuples, where each tuple contains an offset and the corresponding kernel value.
     pub fn gen_offset_list(&self, pds_strides: &[isize]) -> Vec<(isize, T)> {
+        let buffer_slice = self.kernel.slice(unsafe {
+            SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
+                start: 0,
+                end: Some(self.kernel.raw_dim()[i] as isize),
+                step: if self.reverse { -1 } else { 1 },
+            }))
+            .unwrap()
+        });
+
         let strides: [isize; N] =
             std::array::from_fn(|i| self.dilation[i] as isize * pds_strides[i]);
 
-        self.kernel
+        buffer_slice
             .indexed_iter()
             .filter(|(_, v)| **v != T::zero())
             .map(|(index, v)| {
@@ -43,24 +57,6 @@ where
                 )
             })
             .collect()
-
-        // let first = self.kernel.as_ptr();
-        // self.kernel
-        //     .iter()
-        //     .filter(|v| **v != T::zero())
-        //     .map(|v| (unsafe { (v as *const T).offset_from(first) }, *v))
-        //     .collect()
-    }
-}
-
-impl<'a, S: RawData, const N: usize> From<&'a ArrayBase<S, Dim<[Ix; N]>>>
-    for KernelWithDilation<'a, S, N>
-{
-    fn from(kernel: &'a ArrayBase<S, Dim<[Ix; N]>>) -> Self {
-        Self {
-            kernel,
-            dilation: [1; N],
-        }
     }
 }
 
@@ -94,7 +90,36 @@ impl<S: RawData, const N: usize> WithDilation<S, N> for ArrayBase<S, Dim<[Ix; N]
         KernelWithDilation {
             kernel: self,
             dilation: dilation.into_dilation(),
+            reverse: false,
         }
+    }
+}
+
+pub trait ReverseKernel<'a, S: RawData, const N: usize> {
+    fn reverse(self) -> KernelWithDilation<'a, S, N>;
+    fn no_reverse(self) -> KernelWithDilation<'a, S, N>;
+}
+
+impl<'a, S: RawData, K, const N: usize> ReverseKernel<'a, S, N> for K
+where
+    K: IntoKernelWithDilation<'a, S, N>,
+{
+    #[inline]
+    fn reverse(self) -> KernelWithDilation<'a, S, N> {
+        let mut kwd = self.into_kernel_with_dilation();
+
+        kwd.reverse = true;
+
+        kwd
+    }
+
+    #[inline]
+    fn no_reverse(self) -> KernelWithDilation<'a, S, N> {
+        let mut kwd = self.into_kernel_with_dilation();
+
+        kwd.reverse = false;
+
+        kwd
     }
 }
 
@@ -129,6 +154,7 @@ mod tests {
 
     #[test]
     fn check_trait_impl() {
+        // #[deprecated(since = "0.4.2", note = "test")]
         fn conv_example<'a, S: RawData + 'a, const N: usize>(
             kernel: impl IntoKernelWithDilation<'a, S, N>,
         ) {
@@ -146,16 +172,12 @@ mod tests {
         let kernel = array![[1, 0, 1], [0, 1, 0]];
 
         conv_example(kernel.with_dilation([1, 2]));
-    }
 
-    #[test]
-    fn check_ndarray_strides() {
-        // let arr = array![[1, 1, 1], [1, 1, 1]];
-        // dbg!(&arr);
-
-        // dbg!(arr.with_dilation(2).gen_offset_list(arr.shape()));
-
-        // let arr = array![[[1, 1, 1], [1, 1, 1]]];
-        // dbg!(&arr);
+        // for convolution (default)
+        conv_example(&kernel);
+        // for convolution (explicit)
+        conv_example(kernel.reverse());
+        // for cross-correlation
+        conv_example(kernel.with_dilation(2).no_reverse());
     }
 }
