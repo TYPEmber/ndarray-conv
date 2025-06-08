@@ -6,9 +6,9 @@ use ndarray::{
 
 /// Represents a kernel along with its dilation factors for each dimension.
 pub struct KernelWithDilation<'a, S: RawData, const N: usize> {
-    pub kernel: &'a ArrayBase<S, Dim<[Ix; N]>>,
-    pub dilation: [usize; N],
-    pub reverse: bool,
+    pub(crate) kernel: &'a ArrayBase<S, Dim<[Ix; N]>>,
+    pub(crate) dilation: [usize; N],
+    pub(crate) reverse: bool,
 }
 
 impl<'a, S: RawData, const N: usize, T> KernelWithDilation<'a, S, N>
@@ -90,7 +90,7 @@ impl<S: RawData, const N: usize> WithDilation<S, N> for ArrayBase<S, Dim<[Ix; N]
         KernelWithDilation {
             kernel: self,
             dilation: dilation.into_dilation(),
-            reverse: false,
+            reverse: true,
         }
     }
 }

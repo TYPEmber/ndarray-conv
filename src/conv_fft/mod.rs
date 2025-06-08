@@ -278,7 +278,7 @@ where
 mod tests {
     use ndarray::array;
 
-    use crate::{dilation::WithDilation, ConvExt};
+    use crate::{dilation::WithDilation, ConvExt, ReverseKernel};
 
     use super::*;
 
@@ -340,7 +340,7 @@ mod tests {
 
         let res_normal = arr
             .conv(
-                kernel.with_dilation(2),
+                kernel.with_dilation(2).no_reverse(),
                 ConvMode::Custom {
                     padding: [3, 3],
                     strides: [2, 2],
@@ -353,7 +353,7 @@ mod tests {
         let res_fft = arr
             .map(|&x| x as f64)
             .conv_fft(
-                kernel.map(|&x| x as f64).with_dilation(2),
+                kernel.map(|&x| x as f64).with_dilation(2).no_reverse(),
                 ConvMode::Custom {
                     padding: [3, 3],
                     strides: [2, 2],

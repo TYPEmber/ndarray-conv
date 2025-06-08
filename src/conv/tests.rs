@@ -1,35 +1,55 @@
 use super::*;
-use crate::dilation::WithDilation;
+use crate::{dilation::WithDilation, ReverseKernel};
 use ndarray::prelude::*;
+use num::traits::FromPrimitive;
+
+fn assert_eq_tch<T, const N: usize>(res: Array<T, Dim<[usize; N]>>, res_tch: tch::Tensor)
+where
+    T: PartialEq + FromPrimitive,
+    Dim<[usize; N]>: Dimension,
+{
+    let tch_res = Array::from_iter(res_tch.reshape(res.len() as i64).iter::<f64>().unwrap())
+        .to_shape(res.shape())
+        .unwrap()
+        .map(|v| T::from_f64(v.round()).unwrap());
+
+    assert!(tch_res.iter().eq(res.iter()));
+}
+
+fn get_tch_shape(shape: &[usize]) -> Vec<i64> {
+    std::iter::repeat_n(1, 2)
+        .chain(shape.iter().map(|v| *v as i64))
+        .collect::<Vec<_>>()
+}
 
 /// Tests the `conv` function with a 2D array and a kernel.
 #[test]
 fn tch_conv2d() {
-    // let a = vec![1, 2, 3];
-    // let b = a
-    //     .iter()
-    //     .flat_map(|&v| std::iter::repeat(v).take(4))
-    //     .collect::<Vec<_>>();
-    let tensor = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-        .to_dtype(tch::Kind::Float, false, true)
-        .reshape([1, 1, 3, 3]);
-    let kernel = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1]])
-        .to_dtype(tch::Kind::Float, false, true)
-        .reshape([1, 1, 2, 3]);
-    // let kernel = tch::Tensor::from_slice2(&[[1]])
-    //     .to_dtype(tch::Kind::Float, false, true)
-    //     .reshape([1, 1, 1, 1]);
-    // let result = tensor.f_conv2d::<tch::Tensor>(&kernel, None, 1, [1, 1], 3i64, 1);
-    let result = tensor.f_conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 2, 1);
-    result.unwrap().print();
-
-    let arr = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
-    let kernel = array![[1, 1, 1], [1, 1, 1]];
+    let arr = array![[1, 1, 1], [1, 1, 1], [1, 1, 2]];
+    let kernel = array![[2, 1, 1], [1, 1, 1]];
 
     let res = arr
-        .conv(kernel.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
+        .conv(
+            kernel.with_dilation(2).no_reverse(),
+            ConvMode::Same,
+            PaddingMode::Zeros,
+        )
         .unwrap();
-    dbg!(res);
+
+    let tensor = tch::Tensor::from_slice(arr.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(arr.shape()));
+
+    let kernel = tch::Tensor::from_slice(kernel.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(kernel.shape()));
+
+    let result = tensor
+        .f_conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 2, 1)
+        .unwrap();
+    // result.unwrap().print();
+
+    assert_eq_tch(res, result);
 }
 
 /// Tests basic convolution operations with various parameters.
@@ -96,18 +116,37 @@ fn test_conv() {
 /// Tests if the convolution result aligns with LibTorch
 #[test]
 fn aligned_with_libtorch() {
-    let tensor = tch::Tensor::from_slice(&[1, 2, 3, 4, 5, 6])
-        .to_dtype(tch::Kind::Float, false, true)
-        .reshape([1, 1, 6]);
-    let kernel = tch::Tensor::from_slice(&[1, 1, 1])
-        .to_dtype(tch::Kind::Float, false, true)
-        .reshape([1, 1, 3]);
+    let arr = array![1, 2, 3, 4, 5, 6];
+    let kernel = array![1, 1, 2];
 
-    let result = tensor.f_conv1d::<tch::Tensor>(&kernel, None, 2, 4, 2, 1);
-    result.unwrap().print();
+    let res = arr
+        .conv(
+            kernel.with_dilation(2).no_reverse(),
+            ConvMode::Custom {
+                padding: [4],
+                strides: [2],
+            },
+            PaddingMode::Zeros,
+        )
+        .unwrap();
+
+    let tensor = tch::Tensor::from_slice(arr.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(arr.shape()));
+    let kernel = tch::Tensor::from_slice(kernel.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(kernel.shape()));
+
+    let res_tch = tensor
+        .f_conv1d::<tch::Tensor>(&kernel, None, 2, 4, 2, 1)
+        .unwrap();
+
+    assert_eq_tch(res, res_tch);
+
+    //
 
     let arr = array![1, 2, 3, 4, 5, 6];
-    let kernel = array![1, 1, 1];
+    let kernel = array![1, 1, 2];
 
     let res = arr
         .conv(
@@ -119,65 +158,83 @@ fn aligned_with_libtorch() {
             PaddingMode::Zeros,
         )
         .unwrap();
-    assert_eq!(res, array![1, 4, 9, 8, 5]);
-    dbg!(res);
 
+    let tensor = tch::Tensor::from_slice(arr.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(arr.shape()));
+
+    // reverse kernel in tch
+    let kernel = tch::Tensor::from_slice(
+        &kernel
+            .as_slice()
+            .unwrap()
+            .iter()
+            .copied()
+            .rev()
+            .collect::<Vec<_>>(),
+    )
+    .to_dtype(tch::Kind::Float, false, true)
+    .reshape(get_tch_shape(kernel.shape()));
+
+    let res_tch = tensor
+        .f_conv1d::<tch::Tensor>(&kernel, None, 2, 4, 2, 1)
+        .unwrap();
+
+    assert_eq_tch(res, res_tch);
+    
     //
-
-    let tensor = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-        .to_dtype(tch::Kind::Float, false, true)
-        .reshape([1, 1, 3, 3]);
-    let kernel = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-        .to_dtype(tch::Kind::Float, false, true)
-        .reshape([1, 1, 3, 3]);
-
-    let result = tensor.f_conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 2, 1);
-    result.unwrap().print();
 
     let arr = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
     let kernel = array![[1, 1, 1], [1, 1, 1,], [1, 1, 1]];
 
     let res = arr
-        .conv(kernel.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
+        .conv(
+            kernel.with_dilation(2).no_reverse(),
+            ConvMode::Same,
+            PaddingMode::Zeros,
+        )
         .unwrap();
-    assert_eq!(res, array![[4, 2, 4], [2, 1, 2], [4, 2, 4]]);
-    dbg!(res);
+
+    let tensor = tch::Tensor::from_slice(arr.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(arr.shape()));
+    let kernel = tch::Tensor::from_slice(kernel.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(kernel.shape()));
+
+    let res_tch = tensor
+        .f_conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 2, 1)
+        .unwrap();
+
+    assert_eq_tch(res, res_tch);
 
     //
-
-    let tensor = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-        .to_dtype(tch::Kind::Float, false, true)
-        .reshape([1, 1, 3, 3]);
-    let kernel = tch::Tensor::from_slice2(&[[1, 1, 1], [1, 1, 1]])
-        .to_dtype(tch::Kind::Float, false, true)
-        .reshape([1, 1, 2, 3]);
-
-    let result = tensor.f_conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 2, 1);
-    result.unwrap().print();
 
     let arr = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
     let kernel = array![[1, 1, 1], [1, 1, 1]];
 
     let res = arr
-        .conv(kernel.with_dilation(2), ConvMode::Same, PaddingMode::Zeros)
+        .conv(
+            kernel.with_dilation(2).no_reverse(),
+            ConvMode::Same,
+            PaddingMode::Zeros,
+        )
         .unwrap();
-    assert_eq!(res, array![[2, 1, 2], [4, 2, 4], [2, 1, 2]]);
-    dbg!(res);
+
+    let tensor = tch::Tensor::from_slice(arr.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(arr.shape()));
+    let kernel = tch::Tensor::from_slice(kernel.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(kernel.shape()));
+
+    let res_tch = tensor
+        .f_conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 2, 1)
+        .unwrap();
+
+    assert_eq_tch(res, res_tch);
 
     //
-
-    let tensor = tch::Tensor::from_slice(&[1, 2, 3, 4, 5, 6, 7, 8])
-        .to_dtype(tch::Kind::Float, false, true)
-        .reshape([1, 1, 2, 2, 2]);
-    let kernel = tch::Tensor::from_slice(&[
-        // 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    ])
-    .to_dtype(tch::Kind::Float, false, true)
-    .reshape([1, 1, 2, 3, 3]);
-
-    let result = tensor.f_conv3d::<tch::Tensor>(&kernel, None, [1, 2, 1], 2, 2, 1);
-    result.unwrap().print();
 
     let arr = array![[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
     let kernel = array![
@@ -187,7 +244,7 @@ fn aligned_with_libtorch() {
 
     let res = arr
         .conv(
-            kernel.with_dilation(2),
+            kernel.with_dilation(2).no_reverse(),
             ConvMode::Custom {
                 padding: [2, 2, 2],
                 strides: [1, 2, 1],
@@ -195,6 +252,17 @@ fn aligned_with_libtorch() {
             PaddingMode::Zeros,
         )
         .unwrap();
-    assert_eq!(res, array![[[1, 2]], [[5, 6]], [[1, 2]], [[5, 6]]]);
-    dbg!(res);
+
+    let tensor = tch::Tensor::from_slice(arr.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(arr.shape()));
+    let kernel = tch::Tensor::from_slice(kernel.as_slice().unwrap())
+        .to_dtype(tch::Kind::Float, false, true)
+        .reshape(get_tch_shape(kernel.shape()));
+
+    let res_tch = tensor
+        .f_conv3d::<tch::Tensor>(&kernel, None, [1, 2, 1], 2, 2, 1)
+        .unwrap();
+
+    assert_eq_tch(res, res_tch);
 }
