@@ -102,7 +102,7 @@ where
             start: 0,
             end: Some(kernel_raw_dim_with_dilation[i] as isize),
             // use negative stride to make kernel reverse
-            step: -(kwd.dilation[i] as isize),
+            step: (kwd.dilation[i] as isize) * if kwd.reverse { 1 } else { -1 },
         }))
         .unwrap()
     });
