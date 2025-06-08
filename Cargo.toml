@@ -16,9 +16,6 @@ rustfft = "6.2"
 realfft = "3.3"
 thiserror = "2.0"
 
-# [dev-dependencies]
-ndarray-rand = "0.15"
-
 [dev-dependencies]
 tch = {version = "0.13.0", features = ["download-libtorch"]}
 criterion = { version = "0.4", features = ["html_reports"] }
@@ -26,6 +23,7 @@ fft-convolver = "0.2"
 fftconvolve = "0.1"
 convolutions-rs = "0.3"
 ndarray-vision = "0.5"
+ndarray-rand = "0.15"
 
 [[bench]]
 name = "with_torch"
