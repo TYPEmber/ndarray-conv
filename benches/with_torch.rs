@@ -66,9 +66,9 @@ fn criterion_benchmark(c: &mut Criterion) {
     //     });
     // });
 
-    c.bench_function("fftconvolve_1d", |b| {
-        b.iter(|| fftconvolve::fftconvolve(&x, &k, fftconvolve::Mode::Same))
-    });
+    // c.bench_function("fftconvolve_1d", |b| {
+    //     b.iter(|| fftconvolve::fftconvolve(&x, &k, fftconvolve::Mode::Same))
+    // });
 
     let x = Array::random((200, 5000), Uniform::new(0f32, 1.));
     let k = Array::random((11, 31), Uniform::new(0f32, 1.));
@@ -104,9 +104,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| tensor.conv2d_padding::<tch::Tensor>(&kernel, None, 1, "same", 1, 1))
     });
 
-    c.bench_function("ndarray_vision_2d", |b| {
-        b.iter(|| x_nvs.conv2d_with_padding(k_nvs.clone(), &ndarray_vision::core::ZeroPadding))
-    });
+    // c.bench_function("ndarray_vision_2d", |b| {
+    //     b.iter(|| x_nvs.conv2d_with_padding(k_nvs.clone(), &ndarray_vision::core::ZeroPadding))
+    // });
 
     // c.bench_function("convolution_rs_2d", |b| {
     //     b.iter(|| {
@@ -120,9 +120,9 @@ fn criterion_benchmark(c: &mut Criterion) {
     //     });
     // });
 
-    c.bench_function("fftconvolve_2d", |b| {
-        b.iter(|| fftconvolve::fftconvolve(&x, &k, fftconvolve::Mode::Same))
-    });
+    // c.bench_function("fftconvolve_2d", |b| {
+    //     b.iter(|| fftconvolve::fftconvolve(&x, &k, fftconvolve::Mode::Same))
+    // });
 
     let x = Array::random((10, 100, 200), Uniform::new(0f32, 1.));
     let k = Array::random((5, 11, 31), Uniform::new(0f32, 1.));
@@ -167,9 +167,9 @@ fn criterion_benchmark(c: &mut Criterion) {
     //     });
     // });
 
-    c.bench_function("fftconvolve_3d", |b| {
-        b.iter(|| fftconvolve::fftconvolve(&x, &k, fftconvolve::Mode::Same))
-    });
+    // c.bench_function("fftconvolve_3d", |b| {
+    //     b.iter(|| fftconvolve::fftconvolve(&x, &k, fftconvolve::Mode::Same))
+    // });
 }
 
 criterion_group!(benches, criterion_benchmark);

@@ -20,8 +20,9 @@ pocketfft (https://github.com/mreineck/pocketfft)
 - [x] conv with strides
 - [x] kernel with dilation
 - [x] handle input size error
-- [ ] explict error type
-- [ ] bench with similar libs
+- [x] explict error type
+- [x] bench with similar libs
+- [ ] conv with GPU acceleration for N dimension `Array`/`ArrayView` via `wgpu`
 
 ## Examples
 
