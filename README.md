@@ -35,6 +35,13 @@ x_nd.conv(
     PaddingMode::Circular,
 );
 
+// for cross-correlation
+x_nd.conv(
+    k_n.no_reverse(),
+    ConvMode::Full,
+    PaddingMode::Circular,
+);
+
 x_1d.view().conv_fft(
     &k_1d,
     ConvMode::Same,
@@ -122,6 +129,7 @@ fftconvolve_3d          time:   [11.991 ms 12.009 ms 12.031 ms]
 ```
 
 ## Versions
+- 0.5.0 - **[breaking change]** Add `ReverseKernel` trait for cross-correlation, make `conv` & `conv_fft` calculating mathematical convolution. 
 - 0.4.2 - Remove `Debug` trait on `T`.
 - 0.4.1 - Doc update.
 - 0.4.0 - Dependency update: update ndarray from 0.15 to 0.16.
