@@ -55,42 +55,18 @@ pub trait Processor<T: FftNum, InElem> {
         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>;
 }
 
-// impl<T: FftNum> Processor for ComplexProcessor<T> {}
+pub trait GetProcessor<T: FftNum, InElem> {
+    fn get_processor() -> impl Processor<T, InElem>;
+}
 
-// pub trait GetProcessor {
-//     fn get_processor() -> impl Processor;
-// }
+impl<T: ConvFftNum> GetProcessor<T, T> for T {
+    fn get_processor() -> impl Processor<T, T> {
+        real::Processor::<T>::default()
+    }
+}
 
-// impl<T: ConvFftNum> GetProcessor for T {
-//     fn get_processor() -> impl Processor {
-//         RealProcessor::<T>::default()
-//     }
-// }
-
-// impl<CT> GetProcessor for CT
-// where
-//     CT: Into<Complex<f64>>,
-// {
-//     fn get_processor() -> impl Processor {
-//         let a:Complex<f64> = 1f64.into();
-//         ComplexProcessor::<f64>::default()
-//     }
-// }
-
-// impl GetProcessor for Complex<f64>
-// {
-//     fn get_processor() -> impl Processor {
-//         let a:Complex<f64> = 1f64.into();
-//         ComplexProcessor::<f64>::default()
-//     }
-// }
-
-pub trait Marker {}
-
-// impl Marker for Complex<f64> {}
-
-// impl GetProcessor for Complex<f64> {
-//     fn get_processor() -> impl Processor {
-//         ComplexProcessor::<f64>::default()
-//     }
-// }
+impl<T: FftNum> GetProcessor<T, Complex<T>> for Complex<T> {
+    fn get_processor() -> impl Processor<T, Complex<T>> {
+        complex::Processor::<T>::default()
+    }
+}
