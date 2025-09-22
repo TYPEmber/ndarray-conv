@@ -12,13 +12,20 @@ use ndarray::{
 use num::{traits::NumAssign, Complex};
 use rustfft::FftNum;
 
-use crate::{conv::ExplicitConv, dilation::IntoKernelWithDilation, ConvMode, PaddingMode};
+use crate::{
+    conv::ExplicitConv,
+    conv_fft::processor::{real, ConvFftNum},
+    dilation::IntoKernelWithDilation,
+    ConvMode, PaddingMode,
+};
 
 mod fft;
 mod good_size;
 mod padding;
+mod processor;
 
-pub use fft::Processor;
+// pub use fft::Processor;
+pub use processor::Processor;
 
 /// Represents a "baked" convolution operation.
 ///
@@ -26,21 +33,21 @@ pub use fft::Processor;
 /// convolutions, including the FFT size, FFT processor, scratch space,
 /// and padding information. It's designed to optimize repeated
 /// convolutions with the same kernel and settings.
-pub struct Baked<T, SK, const N: usize>
-where
-    T: NumAssign + Debug + FftNum,
-    SK: RawData,
-{
-    fft_size: [usize; N],
-    fft_processor: Processor<T>,
-    scratch: Vec<Complex<T>>,
-    cm: ExplicitConv<N>,
-    padding_mode: PaddingMode<N, T>,
-    kernel_raw_dim_with_dilation: [usize; N],
-    pds_raw_dim: [usize; N],
-    kernel_pd: Array<T, Dim<[Ix; N]>>,
-    _sk_hint: PhantomData<SK>,
-}
+// pub struct Baked<T, SK, const N: usize>
+// where
+//     T: NumAssign + Debug + Copy,
+//     SK: RawData,
+// {
+//     fft_size: [usize; N],
+//     fft_processor: impl Processor<T>,
+//     scratch: Vec<Complex<T>>,
+//     cm: ExplicitConv<N>,
+//     padding_mode: PaddingMode<N, T>,
+//     kernel_raw_dim_with_dilation: [usize; N],
+//     pds_raw_dim: [usize; N],
+//     kernel_pd: Array<T, Dim<[Ix; N]>>,
+//     _sk_hint: PhantomData<SK>,
+// }
 
 /// Extends `ndarray`'s `ArrayBase` with FFT-accelerated convolution operations.
 ///
@@ -76,7 +83,7 @@ where
 /// FFT-based convolutions are generally faster for larger kernels but may have higher overhead for smaller kernels.
 pub trait ConvFFTExt<'a, T, S, SK, const N: usize>
 where
-    T: FftNum + NumAssign,
+    T: NumAssign + Copy,
     S: RawData,
     SK: RawData,
 {
@@ -92,8 +99,10 @@ where
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
-        fft_processor: &mut Processor<T>,
-    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>;
+        fft_processor: &mut impl Processor<T, T>,
+    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>
+    where
+        T: rustfft::FftNum;
 
     // fn conv_fft_bake(
     //     &self,
@@ -107,7 +116,7 @@ where
 
 impl<'a, T, S, SK, const N: usize> ConvFFTExt<'a, T, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
 where
-    T: NumAssign + FftNum,
+    T: NumAssign + ConvFftNum,
     S: Data<Elem = T> + 'a,
     SK: Data<Elem = T> + 'a,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
@@ -209,7 +218,7 @@ where
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
     ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>> {
-        let mut p = Processor::default();
+        let mut p = real::Processor::<T>::default();
         self.conv_fft_with_processor(kernel, conv_mode, padding_mode, &mut p)
     }
 
@@ -218,8 +227,11 @@ where
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
         padding_mode: PaddingMode<N, T>,
-        fft_processor: &mut Processor<T>,
-    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>> {
+        fft_processor: &mut impl Processor<T, T>,
+    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>
+    where
+        T: rustfft::FftNum,
+    {
         let kwd = kernel.into_kernel_with_dilation();
 
         let data_raw_dim = self.raw_dim();
