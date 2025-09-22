@@ -181,7 +181,7 @@ fn aligned_with_libtorch() {
         .unwrap();
 
     assert_eq_tch(res, res_tch);
-    
+
     //
 
     let arr = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
