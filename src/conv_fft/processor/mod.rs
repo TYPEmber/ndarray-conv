@@ -17,7 +17,11 @@ macro_rules! impl_conv_fft_num {
 
 impl_conv_fft_num!(i8, i16, i32, isize, f32, f64);
 
-pub trait Processor<T: FftNum, InElem> {
+pub fn get<T:FftNum, InElem: GetProcessor<T, InElem>>() -> impl Processor<T, InElem> {
+    InElem::get_processor()
+}
+
+pub trait Processor<T: FftNum, InElem: GetProcessor<T, InElem>> {
     fn get_scratch<const N: usize>(&mut self, input_dim: [usize; N]) -> Vec<Complex<T>>;
 
     fn forward<S: DataMut<Elem = InElem>, const N: usize>(
@@ -55,7 +59,10 @@ pub trait Processor<T: FftNum, InElem> {
         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>;
 }
 
-pub trait GetProcessor<T: FftNum, InElem> {
+pub trait GetProcessor<T: FftNum, InElem>
+where
+    InElem: GetProcessor<T, InElem>,
+{
     fn get_processor() -> impl Processor<T, InElem>;
 }
 

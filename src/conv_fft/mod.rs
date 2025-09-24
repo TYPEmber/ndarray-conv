@@ -25,14 +25,14 @@ mod padding;
 mod processor;
 
 // pub use fft::Processor;
-pub use processor::Processor;
+pub use processor::{Processor, GetProcessor, get as get_processor};
 
-/// Represents a "baked" convolution operation.
-///
-/// This struct holds pre-computed data for performing FFT-accelerated
-/// convolutions, including the FFT size, FFT processor, scratch space,
-/// and padding information. It's designed to optimize repeated
-/// convolutions with the same kernel and settings.
+// /// Represents a "baked" convolution operation.
+// ///
+// /// This struct holds pre-computed data for performing FFT-accelerated
+// /// convolutions, including the FFT size, FFT processor, scratch space,
+// /// and padding information. It's designed to optimize repeated
+// /// convolutions with the same kernel and settings.
 // pub struct Baked<T, SK, const N: usize>
 // where
 //     T: NumAssign + Debug + Copy,
@@ -81,9 +81,10 @@ pub use processor::Processor;
 /// # Notes
 ///
 /// FFT-based convolutions are generally faster for larger kernels but may have higher overhead for smaller kernels.
-pub trait ConvFFTExt<'a, T, S, SK, const N: usize>
+pub trait ConvFFTExt<'a, T, InElem, S, SK, const N: usize>
 where
-    T: NumAssign + Copy,
+    T: NumAssign + Copy + FftNum,
+    InElem: processor::GetProcessor<T, InElem> + Copy + NumAssign,
     S: RawData,
     SK: RawData,
 {
@@ -91,18 +92,16 @@ where
         &self,
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
-        padding_mode: PaddingMode<N, T>,
-    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>;
+        padding_mode: PaddingMode<N, InElem>,
+    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>;
 
     fn conv_fft_with_processor(
         &self,
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
-        padding_mode: PaddingMode<N, T>,
-        fft_processor: &mut impl Processor<T, T>,
-    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>
-    where
-        T: rustfft::FftNum;
+        padding_mode: PaddingMode<N, InElem>,
+        fft_processor: &mut impl Processor<T, InElem>,
+    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>;
 
     // fn conv_fft_bake(
     //     &self,
@@ -114,11 +113,13 @@ where
     // fn conv_fft_with_baked(&self, baked: &mut Baked<T, SK, N>) -> Array<T, Dim<[Ix; N]>>;
 }
 
-impl<'a, T, S, SK, const N: usize> ConvFFTExt<'a, T, S, SK, N> for ArrayBase<S, Dim<[Ix; N]>>
+impl<'a, T, InElem, S, SK, const N: usize> ConvFFTExt<'a, T, InElem, S, SK, N>
+    for ArrayBase<S, Dim<[Ix; N]>>
 where
-    T: NumAssign + ConvFftNum,
-    S: Data<Elem = T> + 'a,
-    SK: Data<Elem = T> + 'a,
+    T: NumAssign + FftNum,
+    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy + Debug,
+    S: Data<Elem = InElem> + 'a,
+    SK: Data<Elem = InElem> + 'a,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
         SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
@@ -216,9 +217,9 @@ where
         &self,
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
-        padding_mode: PaddingMode<N, T>,
-    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>> {
-        let mut p = real::Processor::<T>::default();
+        padding_mode: PaddingMode<N, InElem>,
+    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>> {
+        let mut p = InElem::get_processor();
         self.conv_fft_with_processor(kernel, conv_mode, padding_mode, &mut p)
     }
 
@@ -226,12 +227,9 @@ where
         &self,
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
         conv_mode: ConvMode<N>,
-        padding_mode: PaddingMode<N, T>,
-        fft_processor: &mut impl Processor<T, T>,
-    ) -> Result<Array<T, Dim<[Ix; N]>>, crate::Error<N>>
-    where
-        T: rustfft::FftNum,
-    {
+        padding_mode: PaddingMode<N, InElem>,
+        fft_processor: &mut impl Processor<T, InElem>,
+    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>> {
         let kwd = kernel.into_kernel_with_dilation();
 
         let data_raw_dim = self.raw_dim();
@@ -250,7 +248,7 @@ where
         let cm = conv_mode.unfold(&kwd);
 
         let pds_raw_dim: [usize; N] =
-            std::array::from_fn(|i| (data_raw_dim[i] + cm.padding[i][0] + cm.padding[i][1]));
+            std::array::from_fn(|i| data_raw_dim[i] + cm.padding[i][0] + cm.padding[i][1]);
         if !(0..N).all(|i| kernel_raw_dim_with_dilation[i] <= pds_raw_dim[i]) {
             return Err(crate::Error::MismatchShape(
                 conv_mode,
@@ -342,8 +340,18 @@ mod tests {
             .unwrap()
             .map(|x| x.round() as i32);
         // dbg!(res_fft);
+        let res_fft_c = arr
+            .map(|&x| Complex::new(x as f32, 0.0))
+            .conv_fft(
+                &kernel.map(|&x| Complex::new(x as f32, 0.0)),
+                ConvMode::Same,
+                PaddingMode::Zeros,
+            )
+            .unwrap()
+            .map(|x| x.re.round() as i32);
 
         assert_eq!(res_normal, res_fft);
+        assert_eq!(res_normal, res_fft_c);
 
         //
 
@@ -376,6 +384,22 @@ mod tests {
             .map(|x| x.round() as i32);
         // dbg!(res_fft);
 
+        let res_fft_c = arr
+            .map(|&x| Complex::new(x as f64, 0.0))
+            .conv_fft(
+                kernel.map(|&x| Complex::new(x as f64, 0.0)).with_dilation(2).no_reverse(),
+                ConvMode::Custom {
+                    padding: [3, 3],
+                    strides: [2, 2],
+                },
+                PaddingMode::Replicate,
+            )
+            .unwrap()
+            .map(|x| x.re.round() as i32);
+
+        assert_eq!(res_normal, res_fft);
+        assert_eq!(res_normal, res_fft_c);
+
         assert_eq!(res_normal, res_fft);
 
         //
@@ -399,7 +423,18 @@ mod tests {
             .map(|x| x.round() as i32);
         // dbg!(res_fft);
 
+        let res_fft_c = arr
+            .map(|&x| Complex::new(x as f32, 0.0))
+            .conv_fft(
+                kernel.map(|&x| Complex::new(x as f32, 0.0)).with_dilation(2),
+                ConvMode::Same,
+                PaddingMode::Zeros,
+            )
+            .unwrap()
+            .map(|x| x.re.round() as i32);
+
         assert_eq!(res_normal, res_fft);
+        assert_eq!(res_normal, res_fft_c);
     }
 
     #[test]

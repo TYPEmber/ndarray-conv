@@ -4,6 +4,7 @@ use ndarray::prelude::*;
 use ndarray_conv::*;
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 use ndarray_vision::processing::ConvolutionExt;
+use num::Complex;
 
 /// Benchmark for 1D convolution using `conv_fft` with various libraries.
 fn criterion_benchmark(c: &mut Criterion) {
@@ -36,7 +37,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     //     assert!((*a as f64 - b).abs() < 1e-5);
     // }
 
-    let mut fft_processor = FftProcessor::default();
+    let mut fft_processor = get_fft_processor();
 
     /// Benchmark for 1D convolution using `conv_fft`.
     c.bench_function("fft_1d", |b| {
@@ -86,7 +87,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .to_dtype(tch::Kind::Float, false, true)
         .reshape([1, 1, 11, 31]);
 
-    let mut fft_processor = FftProcessor::default();
+    let mut fft_processor = get_fft_processor();
 
     /// Benchmark for 2D convolution using `conv_fft`.
     c.bench_function("fft_2d", |b| {
@@ -137,7 +138,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .to_dtype(tch::Kind::Float, false, true)
         .reshape([1, 1, 5, 11, 31]);
 
-    let mut fft_processor = FftProcessor::default();
+    let mut fft_processor = get_fft_processor();
 
     /// Benchmark for 3D convolution using `conv_fft`.
     c.bench_function("fft_3d", |b| {
