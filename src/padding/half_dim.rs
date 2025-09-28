@@ -6,7 +6,7 @@
 //! for different padding modes like constant, replicate, reflect and
 //! circular.
 
-use ndarray::{Array, ArrayBase, Axis, DataMut, Dim, Ix, RemoveAxis};
+use ndarray::{ArrayBase, Axis, DataMut, Dim, Ix, RemoveAxis};
 use num::traits::NumAssign;
 
 /// Applies constant padding to the front of a given dimension of an array.

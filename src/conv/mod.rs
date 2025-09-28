@@ -1,8 +1,6 @@
 //! Provides convolution operations for `ndarray` arrays.
 //! Includes standard convolution and related utilities.
 
-use std::fmt::Debug;
-
 use ndarray::{
     Array, ArrayBase, ArrayView, Data, Dim, Dimension, IntoDimension, Ix, RawData, RemoveAxis,
     SliceArg, SliceInfo, SliceInfoElem,
@@ -46,7 +44,7 @@ impl<const N: usize> ConvMode<N> {
             ConvMode::Same => ExplicitConv {
                 padding: std::array::from_fn(|i| {
                     let k_size = kernel_dim[i];
-                    if k_size % 2 == 0 {
+                    if k_size.is_multiple_of(2) {
                         [(k_size - 1) / 2 + 1, (k_size - 1) / 2]
                     } else {
                         [(k_size - 1) / 2; 2]

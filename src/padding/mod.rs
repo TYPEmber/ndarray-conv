@@ -453,8 +453,6 @@ fn padding_explicit<const N: usize, T, S, D, SO, DO>(
 
 #[cfg(test)]
 mod tests {
-    use std::ops::AddAssign;
-
     use ndarray::prelude::*;
 
     use super::*;
@@ -609,7 +607,7 @@ mod tests {
         check(&arr, PaddingMode::Circular, explicit_padding);
     }
 
-    fn check<T: AddAssign + Copy, const N: usize>(
+    fn check<T, const N: usize>(
         arr: &Array<T, Dim<[Ix; N]>>,
         padding_mode: PaddingMode<N, T>,
         explicit_padding: ExplicitPadding<N>,

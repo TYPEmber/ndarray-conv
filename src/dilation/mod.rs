@@ -81,12 +81,12 @@ impl<const N: usize> IntoDilation<N> for [usize; N] {
 
 /// Trait for adding dilation information to a kernel.
 pub trait WithDilation<S: RawData, const N: usize> {
-    fn with_dilation(&self, dilation: impl IntoDilation<N>) -> KernelWithDilation<S, N>;
+    fn with_dilation(&self, dilation: impl IntoDilation<N>) -> KernelWithDilation<'_, S, N>;
 }
 
 impl<S: RawData, const N: usize> WithDilation<S, N> for ArrayBase<S, Dim<[Ix; N]>> {
     #[inline]
-    fn with_dilation(&self, dilation: impl IntoDilation<N>) -> KernelWithDilation<S, N> {
+    fn with_dilation(&self, dilation: impl IntoDilation<N>) -> KernelWithDilation<'_, S, N> {
         KernelWithDilation {
             kernel: self,
             dilation: dilation.into_dilation(),
