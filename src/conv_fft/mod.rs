@@ -269,7 +269,7 @@ where
         data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
         // let mul_spec = data_pd_fft * kernel_pd_fft;
 
-        let output = fft_processor.backward(data_pd_fft);
+        let output = fft_processor.backward(&mut data_pd_fft);
 
         let output = output.slice_move(unsafe {
             SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
