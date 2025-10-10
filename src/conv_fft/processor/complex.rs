@@ -47,22 +47,10 @@ impl<T: FftNum> Processor<T> {
         let output = Array::uninit(input.raw_dim());
         let mut output = unsafe { output.assume_init() };
 
-        let fft = self.cp.plan_fft(output.shape()[N - 1], direction);
-
-        // prepare scratch space for out-of-place processing
-        let mut scratch = vec![Complex::new(T::zero(), T::zero());
-            fft.get_outofplace_scratch_len()];
-
-        fft.process_outofplace_with_scratch(
-            input.as_slice_mut().unwrap(),
-            output.as_slice_mut().unwrap(),
-            &mut scratch,
-        );
-
         let mut buffer = input.view_mut();
 
-    // axes permutation helper: rotate so the next dimension becomes the
-    // last (contiguous) axis before each subsequent stage.
+        // axes permutation helper: rotate so the next dimension becomes the
+        // last (contiguous) axis before each subsequent stage.
         let mut axes: [usize; N] = std::array::from_fn(|i| i);
 
         match direction {
@@ -71,19 +59,7 @@ impl<T: FftNum> Processor<T> {
         };
 
         // perform FFT on last axis, then permute and repeat for remaining axes
-        for _ in 0..N - 1 {
-            output = output.permuted_axes(axes);
-
-            // reshape
-            buffer = unsafe { ArrayViewMut::from_shape_ptr(output.raw_dim(), buffer.as_mut_ptr()) };
-            buffer.zip_mut_with(&output, |transpose, &origin| {
-                *transpose = origin;
-            });
-
-            // continugous
-            output = Array::from_shape_vec(output.raw_dim(), output.into_raw_vec_and_offset().0)
-                .unwrap();
-
+        for i in 0..N {
             let fft = self.cp.plan_fft(output.shape()[N - 1], direction);
             let mut scratch =
                 vec![Complex::new(T::zero(), T::zero()); fft.get_outofplace_scratch_len()];
@@ -93,6 +69,23 @@ impl<T: FftNum> Processor<T> {
                 output.as_slice_mut().unwrap(),
                 &mut scratch,
             );
+
+            // permute axes so the next axis becomes the last (contiguous)
+            if i != N - 1 {
+                output = output.permuted_axes(axes);
+
+                // reshape
+                buffer =
+                    unsafe { ArrayViewMut::from_shape_ptr(output.raw_dim(), buffer.as_mut_ptr()) };
+                buffer.zip_mut_with(&output, |transpose, &origin| {
+                    *transpose = origin;
+                });
+
+                // continuous
+                output =
+                    Array::from_shape_vec(output.raw_dim(), output.into_raw_vec_and_offset().0)
+                        .unwrap();
+            }
         }
 
         output
@@ -131,34 +124,134 @@ impl<T: FftNum> ProcessorTrait<T, Complex<T>> for Processor<T> {
 mod tests {
     use super::*;
     use ndarray::array;
-    
+
     #[test]
     fn test_forward_backward_1d() {
         let mut proc = Processor::<f32>::default();
-        let arr = array![
+        let original = array![
             Complex::new(1.0f32, 0.0),
             Complex::new(2.0, 0.0),
             Complex::new(3.0, 0.0),
             Complex::new(4.0, 0.0)
         ];
-        let mut freq = proc.forward(&mut arr.clone());
+        let mut input = original.clone();
+        let mut freq = proc.forward(&mut input);
         let recon = proc.backward(&mut freq);
-        for (a, b) in arr.iter().zip(recon.iter()) {
-            assert!((a.re - b.re).abs() < 1e-4 && (a.im - b.im).abs() < 1e-4);
+
+        for (orig, recon) in original.iter().zip(recon.iter()) {
+            assert!(
+                (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
+                "1D Forward->Backward failed. Original: {:?}, Reconstructed: {:?}",
+                orig,
+                recon
+            );
         }
     }
 
     #[test]
     fn test_forward_backward_2d() {
         let mut proc = Processor::<f32>::default();
-        let arr = array![
+        let original = array![
             [Complex::new(1.0f32, 0.0), Complex::new(2.0, 0.0)],
             [Complex::new(3.0, 0.0), Complex::new(4.0, 0.0)]
         ];
-        let mut freq = proc.forward(&mut arr.clone());
+        let mut input = original.clone();
+        let mut freq = proc.forward(&mut input);
         let recon = proc.backward(&mut freq);
-        for (a, b) in arr.iter().zip(recon.iter()) {
-            assert!((a.re - b.re).abs() < 1e-4 && (a.im - b.im).abs() < 1e-4);
+
+        for (orig, recon) in original.iter().zip(recon.iter()) {
+            assert!(
+                (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
+                "2D Forward->Backward failed. Original: {:?}, Reconstructed: {:?}",
+                orig,
+                recon
+            );
+        }
+    }
+
+    #[test]
+    fn test_forward_backward_3d() {
+        let mut proc = Processor::<f32>::default();
+        let original = array![
+            [
+                [Complex::new(1.0f32, 0.0), Complex::new(2.0, 0.0)],
+                [Complex::new(3.0, 0.0), Complex::new(4.0, 0.0)]
+            ],
+            [
+                [Complex::new(5.0, 0.0), Complex::new(6.0, 0.0)],
+                [Complex::new(7.0, 0.0), Complex::new(8.0, 0.0)]
+            ]
+        ];
+        let mut input = original.clone();
+        let mut freq = proc.forward(&mut input);
+        let recon = proc.backward(&mut freq);
+
+        for (orig, recon) in original.iter().zip(recon.iter()) {
+            assert!(
+                (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
+                "3D Forward->Backward failed. Original: {:?}, Reconstructed: {:?}",
+                orig,
+                recon
+            );
+        }
+    }
+
+    #[test]
+    fn test_forward_backward_with_complex_values() {
+        let mut proc = Processor::<f32>::default();
+        let original = array![
+            Complex::new(1.0f32, 0.5),
+            Complex::new(2.0, -1.0),
+            Complex::new(3.0, 2.0),
+            Complex::new(4.0, -0.5)
+        ];
+        let mut input = original.clone();
+        let mut freq = proc.forward(&mut input);
+        let recon = proc.backward(&mut freq);
+
+        for (orig, recon) in original.iter().zip(recon.iter()) {
+            assert!(
+                (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
+                "Complex Forward->Backward failed. Original: {:?}, Reconstructed: {:?}",
+                orig,
+                recon
+            );
+        }
+    }
+
+    #[test]
+    fn test_forward_backward_different_sizes() {
+        let test_cases = vec![
+            array![Complex::new(1.0f32, 0.0), Complex::new(2.0, 0.0)],
+            array![
+                Complex::new(1.0f32, 0.0),
+                Complex::new(2.0, 1.0),
+                Complex::new(3.0, -1.0)
+            ],
+            array![
+                Complex::new(1.0f32, 0.0),
+                Complex::new(2.0, 0.0),
+                Complex::new(3.0, 0.0),
+                Complex::new(4.0, 0.0),
+                Complex::new(5.0, 0.0)
+            ],
+        ];
+
+        for (i, original) in test_cases.into_iter().enumerate() {
+            let mut proc = Processor::<f32>::default();
+            let mut input = original.clone();
+            let mut freq = proc.forward(&mut input);
+            let recon = proc.backward(&mut freq);
+
+            for (orig, recon) in original.iter().zip(recon.iter()) {
+                assert!(
+                    (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
+                    "Test case {} failed. Original: {:?}, Reconstructed: {:?}",
+                    i,
+                    orig,
+                    recon
+                );
+            }
         }
     }
 
