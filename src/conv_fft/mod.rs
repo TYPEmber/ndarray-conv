@@ -19,7 +19,6 @@ use crate::{
     ConvMode, PaddingMode,
 };
 
-mod fft;
 mod good_size;
 mod padding;
 mod processor;
