@@ -15,12 +15,13 @@ num = "0.4"
 rustfft = "6.4"
 realfft = "3.5"
 thiserror = "2.0"
+castaway = "0.2"
 
 [dev-dependencies]
 tch = {version = "0.20.0", features = ["download-libtorch"]}
 criterion = { version = "0.6", features = ["html_reports"] }
 fft-convolver = "0.2"
-fftconvolve = "0.1"
+# fftconvolve = "0.1"
 convolutions-rs = "0.3"
 ndarray-vision = "0.5"
 ndarray-rand = "0.15"
