@@ -152,32 +152,236 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn check_trait_impl() {
-        // #[deprecated(since = "0.4.2", note = "test")]
-        fn conv_example<'a, S: RawData + 'a, const N: usize>(
-            kernel: impl IntoKernelWithDilation<'a, S, N>,
-        ) {
-            let _ = kernel.into_kernel_with_dilation();
+    // ===== Trait Implementation Tests =====
+
+    mod trait_implementation {
+        use super::*;
+
+        #[test]
+        fn check_trait_impl() {
+            fn conv_example<'a, S: RawData + 'a, const N: usize>(
+                kernel: impl IntoKernelWithDilation<'a, S, N>,
+            ) {
+                let _ = kernel.into_kernel_with_dilation();
+            }
+
+            let kernel = array![1, 0, 1];
+            conv_example(&kernel);
+
+            let kernel = array![1, 0, 1];
+            conv_example(kernel.with_dilation(2));
+
+            let kernel = array![[1, 0, 1], [0, 1, 0]];
+            conv_example(kernel.with_dilation([1, 2]));
+
+            // for convolution (default)
+            conv_example(&kernel);
+            // for convolution (explicit)
+            conv_example(kernel.reverse());
+            // for cross-correlation
+            conv_example(kernel.with_dilation(2).no_reverse());
+        }
+    }
+
+    // ===== Basic API Tests =====
+
+    mod basic_api {
+        use super::*;
+
+        #[test]
+        fn dilation_and_reverse_settings() {
+            let kernel = array![1, 2, 3];
+
+            // Test dilation is set correctly for different dimensions
+            assert_eq!(kernel.with_dilation(2).dilation, [2]);
+            assert_eq!(array![[1, 2]].with_dilation([2, 3]).dilation, [2, 3]);
+            assert_eq!(array![[[1]]].with_dilation([1, 2, 3]).dilation, [1, 2, 3]);
+
+            // Test reverse behavior (default is true, can be toggled)
+            assert!(kernel.with_dilation(1).reverse);
+            assert!(!kernel.with_dilation(1).no_reverse().reverse);
+            assert!(kernel.with_dilation(1).no_reverse().reverse().reverse);
+        }
+    }
+
+    // ===== Offset Generation Tests =====
+
+    mod offset_generation {
+        use super::*;
+
+        #[test]
+        fn gen_offset_1d_no_dilation() {
+            let kernel = array![1.0, 2.0, 3.0];
+            let kwd = kernel.with_dilation(1);
+
+            // Stride = 1 for 1D
+            let offsets = kwd.gen_offset_list(&[1]);
+
+            // Should have 3 offsets (all kernel elements)
+            assert_eq!(offsets.len(), 3);
+
+            // With reverse=true, kernel is reversed: [3, 2, 1]
+            // Offsets: [0, 1, 2] * stride[1] = [0, 1, 2]
+            assert_eq!(offsets[0], (0, 3.0));
+            assert_eq!(offsets[1], (1, 2.0));
+            assert_eq!(offsets[2], (2, 1.0));
         }
 
-        let kernel = array![1, 0, 1];
+        #[test]
+        fn gen_offset_1d_with_dilation() {
+            let kernel = array![1.0, 2.0, 3.0];
+            let kwd = kernel.with_dilation(2);
 
-        conv_example(&kernel);
+            // Stride = 1, but dilation = 2
+            let offsets = kwd.gen_offset_list(&[1]);
 
-        let kernel = array![1, 0, 1];
+            assert_eq!(offsets.len(), 3);
 
-        conv_example(kernel.with_dilation(2));
+            // Effective kernel: [1, 0, 2, 0, 3]
+            // With reverse, indices with dilation: [0*2, 1*2, 2*2] = [0, 2, 4]
+            // But reversed: [3, 2, 1] at positions [0, 2, 4]
+            assert_eq!(offsets[0], (0, 3.0));
+            assert_eq!(offsets[1], (2, 2.0));
+            assert_eq!(offsets[2], (4, 1.0));
+        }
 
-        let kernel = array![[1, 0, 1], [0, 1, 0]];
+        #[test]
+        fn gen_offset_1d_no_reverse() {
+            let kernel = array![1.0, 2.0, 3.0];
+            let kwd = kernel.with_dilation(2).no_reverse();
 
-        conv_example(kernel.with_dilation([1, 2]));
+            let offsets = kwd.gen_offset_list(&[1]);
 
-        // for convolution (default)
-        conv_example(&kernel);
-        // for convolution (explicit)
-        conv_example(kernel.reverse());
-        // for cross-correlation
-        conv_example(kernel.with_dilation(2).no_reverse());
+            assert_eq!(offsets.len(), 3);
+
+            // No reverse: [1, 2, 3] at positions [0, 2, 4]
+            assert_eq!(offsets[0], (0, 1.0));
+            assert_eq!(offsets[1], (2, 2.0));
+            assert_eq!(offsets[2], (4, 3.0));
+        }
+
+        #[test]
+        fn gen_offset_2d_no_dilation() {
+            let kernel = array![[1.0, 2.0], [3.0, 4.0]];
+            let kwd = kernel.with_dilation(1);
+
+            // Strides for 2D: [row_stride, col_stride]
+            let offsets = kwd.gen_offset_list(&[10, 1]);
+
+            assert_eq!(offsets.len(), 4);
+
+            // With reverse, kernel becomes [[4, 3], [2, 1]]
+            // Flattened in row-major order with reversed indices:
+            // (0,0)=4 at offset 0, (0,1)=3 at offset 1, (1,0)=2 at offset 10, (1,1)=1 at offset 11
+            assert_eq!(offsets[0], (0, 4.0));
+            assert_eq!(offsets[1], (1, 3.0));
+            assert_eq!(offsets[2], (10, 2.0));
+            assert_eq!(offsets[3], (11, 1.0));
+        }
+
+        #[test]
+        fn gen_offset_2d_with_dilation() {
+            let kernel = array![[1.0, 2.0], [3.0, 4.0]];
+            let kwd = kernel.with_dilation([2, 3]);
+
+            let offsets = kwd.gen_offset_list(&[10, 1]);
+
+            assert_eq!(offsets.len(), 4);
+
+            // Dilation [2, 3] means:
+            // - row spacing = 2 (kernel rows are 0 and 2*10=20 apart)
+            // - col spacing = 3 (kernel cols are 0 and 3*1=3 apart)
+            // With reverse, kernel [[4,3],[2,1]] at effective positions:
+            // (0,0)=4 at 0, (0,3)=3 at 3, (2,0)=2 at 20, (2,3)=1 at 23
+            assert_eq!(offsets[0], (0, 4.0));
+            assert_eq!(offsets[1], (3, 3.0));
+            assert_eq!(offsets[2], (20, 2.0));
+            assert_eq!(offsets[3], (23, 1.0));
+        }
+
+        #[test]
+        fn gen_offset_filters_zeros() {
+            let kernel = array![1.0, 0.0, 2.0, 0.0, 3.0];
+            let kwd = kernel.with_dilation(1);
+
+            let offsets = kwd.gen_offset_list(&[1]);
+
+            // Should only have 3 offsets (non-zero elements)
+            assert_eq!(offsets.len(), 3);
+        }
+    }
+
+    // ===== Edge Cases =====
+
+    mod edge_cases {
+        use super::*;
+
+        #[test]
+        fn single_element_kernel() {
+            let kernel = array![42.0];
+            let kwd = kernel.with_dilation(5);
+
+            assert_eq!(kwd.dilation, [5]);
+
+            let offsets = kwd.gen_offset_list(&[1]);
+            assert_eq!(offsets.len(), 1);
+            assert_eq!(offsets[0], (0, 42.0));
+        }
+
+        #[test]
+        fn all_zeros_kernel() {
+            let kernel = array![0.0, 0.0, 0.0];
+            let kwd = kernel.with_dilation(2);
+
+            let offsets = kwd.gen_offset_list(&[1]);
+            // Should filter out all zeros
+            assert_eq!(offsets.len(), 0);
+        }
+
+        #[test]
+        fn large_dilation_value() {
+            let kernel = array![1, 2];
+            let kwd = kernel.with_dilation(100);
+
+            assert_eq!(kwd.dilation, [100]);
+            // Effective size: 2 + (2-1)*99 = 101
+        }
+
+        #[test]
+        fn asymmetric_2d_dilation() {
+            let kernel = array![[1, 2, 3], [4, 5, 6]];
+            let kwd = kernel.with_dilation([1, 5]);
+
+            assert_eq!(kwd.dilation, [1, 5]);
+            // dim 0: no dilation (keeps 2 rows)
+            // dim 1: dilation=5 (3 + (3-1)*4 = 11 effective cols)
+        }
+    }
+
+    // ===== Integration Tests =====
+
+    mod integration_with_padding {
+        use super::*;
+
+        #[test]
+        fn effective_kernel_size_calculation() {
+            // This tests the concept used in padding calculations
+            let kernel = array![1, 2, 3];
+
+            // No dilation
+            let kwd1 = kernel.with_dilation(1);
+            let effective_size_1 = kernel.len() + (kernel.len() - 1) * (kwd1.dilation[0] - 1);
+            assert_eq!(effective_size_1, 3);
+
+            // Dilation = 2
+            let kwd2 = kernel.with_dilation(2);
+            let effective_size_2 = kernel.len() + (kernel.len() - 1) * (kwd2.dilation[0] - 1);
+            assert_eq!(effective_size_2, 5);
+
+            // Dilation = 3
+            let kwd3 = kernel.with_dilation(3);
+            let effective_size_3 = kernel.len() + (kernel.len() - 1) * (kwd3.dilation[0] - 1);
+            assert_eq!(effective_size_3, 7);
+        }
     }
 }
