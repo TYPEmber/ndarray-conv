@@ -125,223 +125,191 @@ mod tests {
     use super::*;
     use ndarray::array;
 
-    #[test]
-    fn test_forward_backward_1d() {
-        let mut proc = Processor::<f32>::default();
-        let original = array![
-            Complex::new(1.0f32, 0.0),
-            Complex::new(2.0, 0.0),
-            Complex::new(3.0, 0.0),
-            Complex::new(4.0, 0.0)
-        ];
-        let mut input = original.clone();
-        let mut freq = proc.forward(&mut input);
-        let recon = proc.backward(&mut freq);
+    // ===== Basic Roundtrip Tests =====
 
-        for (orig, recon) in original.iter().zip(recon.iter()) {
-            assert!(
-                (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
-                "1D Forward->Backward failed. Original: {:?}, Reconstructed: {:?}",
-                orig,
-                recon
-            );
-        }
-    }
+    mod roundtrip {
+        use super::*;
 
-    #[test]
-    fn test_forward_backward_2d() {
-        let mut proc = Processor::<f32>::default();
-        let original = array![
-            [Complex::new(1.0f32, 0.0), Complex::new(2.0, 0.0)],
-            [Complex::new(3.0, 0.0), Complex::new(4.0, 0.0)]
-        ];
-        let mut input = original.clone();
-        let mut freq = proc.forward(&mut input);
-        let recon = proc.backward(&mut freq);
-
-        for (orig, recon) in original.iter().zip(recon.iter()) {
-            assert!(
-                (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
-                "2D Forward->Backward failed. Original: {:?}, Reconstructed: {:?}",
-                orig,
-                recon
-            );
-        }
-    }
-
-    #[test]
-    fn test_forward_backward_3d() {
-        let mut proc = Processor::<f32>::default();
-        let original = array![
-            [
-                [Complex::new(1.0f32, 0.0), Complex::new(2.0, 0.0)],
-                [Complex::new(3.0, 0.0), Complex::new(4.0, 0.0)]
-            ],
-            [
-                [Complex::new(5.0, 0.0), Complex::new(6.0, 0.0)],
-                [Complex::new(7.0, 0.0), Complex::new(8.0, 0.0)]
-            ]
-        ];
-        let mut input = original.clone();
-        let mut freq = proc.forward(&mut input);
-        let recon = proc.backward(&mut freq);
-
-        for (orig, recon) in original.iter().zip(recon.iter()) {
-            assert!(
-                (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
-                "3D Forward->Backward failed. Original: {:?}, Reconstructed: {:?}",
-                orig,
-                recon
-            );
-        }
-    }
-
-    #[test]
-    fn test_forward_backward_with_complex_values() {
-        let mut proc = Processor::<f32>::default();
-        let original = array![
-            Complex::new(1.0f32, 0.5),
-            Complex::new(2.0, -1.0),
-            Complex::new(3.0, 2.0),
-            Complex::new(4.0, -0.5)
-        ];
-        let mut input = original.clone();
-        let mut freq = proc.forward(&mut input);
-        let recon = proc.backward(&mut freq);
-
-        for (orig, recon) in original.iter().zip(recon.iter()) {
-            assert!(
-                (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
-                "Complex Forward->Backward failed. Original: {:?}, Reconstructed: {:?}",
-                orig,
-                recon
-            );
-        }
-    }
-
-    #[test]
-    fn test_forward_backward_different_sizes() {
-        let test_cases = vec![
-            array![Complex::new(1.0f32, 0.0), Complex::new(2.0, 0.0)],
-            array![
-                Complex::new(1.0f32, 0.0),
-                Complex::new(2.0, 1.0),
-                Complex::new(3.0, -1.0)
-            ],
-            array![
-                Complex::new(1.0f32, 0.0),
-                Complex::new(2.0, 0.0),
-                Complex::new(3.0, 0.0),
-                Complex::new(4.0, 0.0),
-                Complex::new(5.0, 0.0)
-            ],
-        ];
-
-        for (i, original) in test_cases.into_iter().enumerate() {
+        #[test]
+        fn test_1d() {
             let mut proc = Processor::<f32>::default();
+            let original = array![
+                Complex::new(1.0f32, 0.5),
+                Complex::new(2.0, -0.25),
+                Complex::new(3.0, 1.25),
+                Complex::new(4.0, -0.75)
+            ];
             let mut input = original.clone();
             let mut freq = proc.forward(&mut input);
             let recon = proc.backward(&mut freq);
 
             for (orig, recon) in original.iter().zip(recon.iter()) {
                 assert!(
-                    (orig.re - recon.re).abs() < 1e-10 && (orig.im - recon.im).abs() < 1e-10,
-                    "Test case {} failed. Original: {:?}, Reconstructed: {:?}",
-                    i,
+                    (orig.re - recon.re).abs() < 1e-6 && (orig.im - recon.im).abs() < 1e-6,
+                    "1D roundtrip failed. Original: {:?}, Reconstructed: {:?}",
                     orig,
                     recon
                 );
             }
         }
+
+        #[test]
+        fn test_2d() {
+            let mut proc = Processor::<f32>::default();
+            let original = array![
+                [Complex::new(1.0f32, 0.5), Complex::new(2.0, -1.0)],
+                [Complex::new(3.0, 1.5), Complex::new(4.0, -0.5)]
+            ];
+            let mut input = original.clone();
+            let mut freq = proc.forward(&mut input);
+            let recon = proc.backward(&mut freq);
+
+            for (orig, recon) in original.iter().zip(recon.iter()) {
+                assert!(
+                    (orig.re - recon.re).abs() < 1e-6 && (orig.im - recon.im).abs() < 1e-6,
+                    "2D roundtrip failed. Original: {:?}, Reconstructed: {:?}",
+                    orig,
+                    recon
+                );
+            }
+        }
+
+        #[test]
+        fn test_3d() {
+            let mut proc = Processor::<f32>::default();
+            let original = array![
+                [
+                    [Complex::new(1.0f32, 0.125), Complex::new(2.0, -0.25)],
+                    [Complex::new(3.0, 0.375), Complex::new(4.0, -0.5)]
+                ],
+                [
+                    [Complex::new(5.0, 0.625), Complex::new(6.0, -0.75)],
+                    [Complex::new(7.0, 0.875), Complex::new(8.0, -1.0)]
+                ]
+            ];
+            let mut input = original.clone();
+            let mut freq = proc.forward(&mut input);
+            let recon = proc.backward(&mut freq);
+
+            for (orig, recon) in original.iter().zip(recon.iter()) {
+                assert!(
+                    (orig.re - recon.re).abs() < 1e-6 && (orig.im - recon.im).abs() < 1e-6,
+                    "3D roundtrip failed. Original: {:?}, Reconstructed: {:?}",
+                    orig,
+                    recon
+                );
+            }
+        }
+
+        #[test]
+        fn different_sizes() {
+            let test_cases = vec![
+                array![Complex::new(1.0f32, 0.5), Complex::new(2.0, -0.25)],
+                array![
+                    Complex::new(1.0f32, 0.75),
+                    Complex::new(2.0, 1.0),
+                    Complex::new(3.0, -1.0)
+                ],
+                array![
+                    Complex::new(1.0f32, 0.25),
+                    Complex::new(2.0, -0.5),
+                    Complex::new(3.0, 0.75),
+                    Complex::new(4.0, -1.0),
+                    Complex::new(5.0, 1.25)
+                ],
+            ];
+
+            for (i, original) in test_cases.into_iter().enumerate() {
+                let mut proc = Processor::<f32>::default();
+                let mut input = original.clone();
+                let mut freq = proc.forward(&mut input);
+                let recon = proc.backward(&mut freq);
+
+                for (orig, recon) in original.iter().zip(recon.iter()) {
+                    assert!(
+                        (orig.re - recon.re).abs() < 1e-6 && (orig.im - recon.im).abs() < 1e-6,
+                        "Size test case {} failed. Original: {:?}, Reconstructed: {:?}",
+                        i,
+                        orig,
+                        recon
+                    );
+                }
+            }
+        }
     }
 
-    #[test]
-    /// process_outofplace_with_scratch: 327.333µs
-    /// process_immutable_with_scratch: 331.25µs
-    /// process_with_scratch: 368.792µs
-    fn bench_process_methods_timing() {
-        // Compare process_immutable_with_scratch (out-of-place) vs process_with_scratch (in-place)
-        // on a single large 1-D FFT to get measurable timings. We print durations
-        // so the developer can run this test with `--nocapture` and examine results.
-        use std::time::Instant;
+    // ===== Complex Value Tests =====
 
-        let mut planner = rustfft::FftPlanner::<f32>::new();
-        let n = 1024usize; // FFT size
-        let fft = planner.plan_fft_forward(n);
+    mod complex_values {
+        use super::*;
 
-        // prepare buffers
-        let mut input = vec![Complex::new(1.0f32, 0.0); n];
-        let mut out = vec![Complex::new(0.0f32, 0.0); n];
-        let mut inplace = input.clone();
+        #[test]
+        fn large_imaginary_parts() {
+            let mut proc = Processor::<f32>::default();
+            let original = array![
+                Complex::new(1.0f32, 3.0),
+                Complex::new(2.0, -2.5),
+                Complex::new(0.5, 4.0),
+                Complex::new(-1.0, 2.0)
+            ];
+            let mut input = original.clone();
+            let mut freq = proc.forward(&mut input);
+            let recon = proc.backward(&mut freq);
 
-        // scratch sized from fft plan
-        let scratch_len = fft.get_inplace_scratch_len();
-        let mut scratch = vec![Complex::new(0.0f32, 0.0); scratch_len];
-
-        let iters = 700usize;
-
-        // Warm up
-        for _ in 0..1000 {
-            fft.process_immutable_with_scratch(
-                input.as_mut_slice(),
-                out.as_mut_slice(),
-                &mut scratch,
-            );
-            fft.process_with_scratch(inplace.as_mut_slice(), &mut scratch);
+            for (orig, recon) in original.iter().zip(recon.iter()) {
+                assert!(
+                    (orig.re - recon.re).abs() < 1e-6 && (orig.im - recon.im).abs() < 1e-6,
+                    "Large imaginary parts roundtrip failed. Original: {:?}, Reconstructed: {:?}",
+                    orig,
+                    recon
+                );
+            }
         }
 
-        // let t_get_scratch = Instant::now();
-        // for _ in 0..iters {
-        //     let mut a = vec![Complex::<f32>::zero(); fft.get_outofplace_scratch_len()];
-        //     fft.process_outofplace_with_scratch(input.as_mut_slice(), out.as_mut_slice(), &mut a);
-        // }
-        // let dur_get_scratch = t_get_scratch.elapsed();
+        #[test]
+        fn pure_imaginary() {
+            let mut proc = Processor::<f32>::default();
+            // Test with pure imaginary numbers (re = 0, im != 0)
+            let original = array![
+                Complex::new(0.0f32, 1.0),
+                Complex::new(0.0, 2.0),
+                Complex::new(0.0, -1.5),
+                Complex::new(0.0, 3.0)
+            ];
+            let mut input = original.clone();
+            let mut freq = proc.forward(&mut input);
+            let recon = proc.backward(&mut freq);
 
-        // dbg!(dur_get_scratch);
-
-        // measure explicit out-of-place with scratch
-        // let t_outofplace = Instant::now();
-        // for _ in 0..iters {
-        //     fft.process_outofplace_with_scratch(
-        //         input.as_mut_slice(),
-        //         out.as_mut_slice(),
-        //         &mut scratch,
-        //     );
-        // }
-        // let dur_outofplace = t_outofplace.elapsed();
-
-        // dbg!(dur_outofplace);
-
-        // measure immutable/out-of-place (immutable API)
-        // let t_immutable = Instant::now();
-        // for _ in 0..iters {
-        //     fft.process_immutable_with_scratch(
-        //         input.as_mut_slice(),
-        //         out.as_mut_slice(),
-        //         &mut scratch,
-        //     );
-        // }
-        // let dur_immutable = t_immutable.elapsed();
-
-        // dbg!(dur_immutable);
-
-        // measure in-place
-        let t_inplace = Instant::now();
-        for _ in 0..iters {
-            // copy input back into inplace buffer each iteration
-            inplace.copy_from_slice(&input);
-            fft.process_with_scratch(inplace.as_mut_slice(), &mut scratch);
+            for (orig, recon) in original.iter().zip(recon.iter()) {
+                assert!(
+                    (orig.re - recon.re).abs() < 1e-6 && (orig.im - recon.im).abs() < 1e-6,
+                    "Pure imaginary roundtrip failed. Original: {:?}, Reconstructed: {:?}",
+                    orig,
+                    recon
+                );
+            }
         }
-        let dur_inplace = t_inplace.elapsed();
 
-        dbg!(dur_inplace);
+        #[test]
+        fn mixed_signs() {
+            let mut proc = Processor::<f32>::default();
+            // Test with various combinations of positive/negative real and imaginary parts
+            let original = array![
+                [Complex::new(1.0f32, 2.0), Complex::new(-1.0, 2.0)],
+                [Complex::new(1.0, -2.0), Complex::new(-1.0, -2.0)]
+            ];
+            let mut input = original.clone();
+            let mut freq = proc.forward(&mut input);
+            let recon = proc.backward(&mut freq);
 
-        // println!(
-        //     "process_immutable_with_scratch: {:?}, process_outofplace_with_scratch: {:?}, process_with_scratch: {:?}, process_get_scratch: {:?}",
-        //     dur_immutable, dur_outofplace, dur_inplace, dur_get_scratch
-        // );
-
-        // The test intentionally doesn't assert on speed; it only prints timings.
-        // Keep it as a smoke check so it always passes.
+            for (orig, recon) in original.iter().zip(recon.iter()) {
+                assert!(
+                    (orig.re - recon.re).abs() < 1e-6 && (orig.im - recon.im).abs() < 1e-6,
+                    "Mixed signs roundtrip failed. Original: {:?}, Reconstructed: {:?}",
+                    orig,
+                    recon
+                );
+            }
+        }
     }
 }

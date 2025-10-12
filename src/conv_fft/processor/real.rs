@@ -55,7 +55,7 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
         let mut output = Array::zeros(output_shape);
         let mut buffer = Array::zeros(output_shape);
 
-        let mut scratch = vec![Complex::new(T::zero(), T::zero()); rp.get_scratch_len()];        
+        let mut scratch = vec![Complex::new(T::zero(), T::zero()); rp.get_scratch_len()];
         for (mut input_row, mut output_row) in input.rows_mut().into_iter().zip(output.rows_mut()) {
             rp.process_with_scratch(
                 input_row.as_slice_mut().unwrap(),
@@ -140,8 +140,8 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
                 vec![Complex::new(T::zero(), T::zero()); fft.get_outofplace_scratch_len()];
 
             // contiguous
-            buffer =
-                Array::from_shape_vec(buffer.raw_dim(), buffer.into_raw_vec_and_offset().0).unwrap();
+            buffer = Array::from_shape_vec(buffer.raw_dim(), buffer.into_raw_vec_and_offset().0)
+                .unwrap();
 
             // out-of-place inverse FFT from `input` into `buffer`
             fft.process_outofplace_with_scratch(
@@ -185,141 +185,103 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::{array, Axis};
+    use ndarray::array;
 
-    #[test]
-    fn index_axis() {
-        let a = array![[1, 2, 3], [4, 5, 6]];
+    // ===== 1D Roundtrip Tests =====
 
-        let shape = a.shape();
-        for dim in 0..shape.len() {
-            for i in 0..shape[dim] {
-                dbg!(a.index_axis(Axis(dim), i));
+    mod roundtrip_1d {
+        use super::*;
+
+        #[test]
+        fn basic() {
+            let original = array![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+            let mut input = original.clone();
+
+            let mut p = Processor {
+                rp: realfft::RealFftPlanner::new(),
+                rp_origin_len: 0,
+                cp: rustfft::FftPlanner::new(),
+            };
+
+            let mut freq = p.forward(&mut input);
+            let reconstructed = p.backward(&mut freq);
+
+            for (orig, recon) in original.iter().zip(reconstructed.iter()) {
+                assert!(
+                    (orig - recon).abs() < 1e-10,
+                    "1D Forward->Backward failed. Original: {}, Reconstructed: {}",
+                    orig,
+                    recon
+                );
+            }
+        }
+
+        #[test]
+        fn different_sizes() {
+            // Test various 1D sizes to catch edge cases
+            let test_cases = vec![
+                array![1.0, 2.0],
+                array![1.0, 2.0, 3.0],
+                array![1.0, 2.0, 3.0, 4.0, 5.0],
+            ];
+
+            for (i, original) in test_cases.into_iter().enumerate() {
+                let mut input = original.clone();
+                let mut p = Processor {
+                    rp: realfft::RealFftPlanner::new(),
+                    rp_origin_len: 0,
+                    cp: rustfft::FftPlanner::new(),
+                };
+
+                let mut freq = p.forward(&mut input);
+                let reconstructed = p.backward(&mut freq);
+
+                for (orig, recon) in original.iter().zip(reconstructed.iter()) {
+                    assert!(
+                        (orig - recon).abs() < 1e-10,
+                        "1D Test case {} failed. Original: {}, Reconstructed: {}",
+                        i,
+                        orig,
+                        recon
+                    );
+                }
             }
         }
     }
 
-    #[test]
-    fn transpose() {
-        let a = array![
-            [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]],
-            [[13, 14, 15, 16], [17, 18, 19, 20], [21, 22, 23, 24]]
-        ];
-        let mut raw_dim = *unsafe {
-            (&mut a.raw_dim() as *mut _ as *mut [usize; 3])
-                .as_mut()
-                .unwrap()
-        };
-        // dbg!(&a);
-        // dbg!(a.t());
-        // dbg!(a.t().t());
+    // ===== 2D Roundtrip Tests =====
 
-        let mut axes = [0, 1, 2];
+    mod roundtrip_2d {
+        use super::*;
 
-        axes.rotate_right(1);
-        raw_dim.rotate_right(1);
-        let a = Array::from_shape_vec(raw_dim, a.permuted_axes(axes).iter().copied().collect())
-            .unwrap();
-        dbg!(&a);
+        #[test]
+        fn basic() {
+            let original = array![[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]];
+            let mut input = original.clone();
 
-        // axes.rotate_left(1);
-        raw_dim.rotate_right(1);
-        let a = Array::from_shape_vec(raw_dim, a.permuted_axes(axes).iter().copied().collect())
-            .unwrap();
-        dbg!(&a);
+            let mut p = Processor {
+                rp: realfft::RealFftPlanner::new(),
+                rp_origin_len: 0,
+                cp: rustfft::FftPlanner::new(),
+            };
 
-        // axes.rotate_left(1);
-        raw_dim.rotate_right(1);
-        let a = Array::from_shape_vec(raw_dim, a.permuted_axes(axes).iter().copied().collect())
-            .unwrap();
-        dbg!(&a);
-    }
+            let mut freq = p.forward(&mut input);
+            let reconstructed = p.backward(&mut freq);
 
-    #[test]
-    fn test_forward_backward() {
-        let original = array![
-            [[1., 2., 3.], [4., 5., 6.]],
-            [[7., 8., 9.], [10., 11., 12.]],
-        ];
-        let mut input = original.clone();
-
-        let mut p = Processor {
-            rp: realfft::RealFftPlanner::new(),
-            rp_origin_len: 0,
-            cp: rustfft::FftPlanner::new(),
-        };
-
-        let mut a_fft = p.forward(&mut input);
-        let reconstructed = p.backward(&mut a_fft);
-
-        // Verify that forward->backward gives us back the original data
-        for (orig, recon) in original.iter().zip(reconstructed.iter()) {
-            assert!(
-                (orig - recon).abs() < 1e-10,
-                "Forward->Backward should reconstruct original data. Original: {}, Reconstructed: {}, Diff: {}",
-                orig, recon, (orig - recon).abs()
-            );
+            for (orig, recon) in original.iter().zip(reconstructed.iter()) {
+                assert!(
+                    (orig - recon).abs() < 1e-10,
+                    "2D Forward->Backward failed. Original: {}, Reconstructed: {}",
+                    orig,
+                    recon
+                );
+            }
         }
-    }
 
-    #[test]
-    fn test_forward_backward_1d() {
-        let original = array![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
-        let mut input = original.clone();
-
-        let mut p = Processor {
-            rp: realfft::RealFftPlanner::new(),
-            rp_origin_len: 0,
-            cp: rustfft::FftPlanner::new(),
-        };
-
-        let mut freq = p.forward(&mut input);
-        let reconstructed = p.backward(&mut freq);
-
-        for (orig, recon) in original.iter().zip(reconstructed.iter()) {
-            assert!(
-                (orig - recon).abs() < 1e-10,
-                "1D Forward->Backward failed. Original: {}, Reconstructed: {}",
-                orig,
-                recon
-            );
-        }
-    }
-
-    #[test]
-    fn test_forward_backward_2d() {
-        let original = array![[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]];
-        let mut input = original.clone();
-
-        let mut p = Processor {
-            rp: realfft::RealFftPlanner::new(),
-            rp_origin_len: 0,
-            cp: rustfft::FftPlanner::new(),
-        };
-
-        let mut freq = p.forward(&mut input);
-        let reconstructed = p.backward(&mut freq);
-
-        for (orig, recon) in original.iter().zip(reconstructed.iter()) {
-            assert!(
-                (orig - recon).abs() < 1e-10,
-                "2D Forward->Backward failed. Original: {}, Reconstructed: {}",
-                orig,
-                recon
-            );
-        }
-    }
-
-    #[test]
-    fn test_forward_backward_1d_different_sizes() {
-        // Test various 1D sizes to catch edge cases
-        let test_cases_1d = vec![
-            array![1.0, 2.0],
-            array![1.0, 2.0, 3.0],
-            array![1.0, 2.0, 3.0, 4.0, 5.0],
-        ];
-
-        for (i, original) in test_cases_1d.into_iter().enumerate() {
+        #[test]
+        fn different_sizes() {
+            // Test 2x2
+            let original = array![[1.0, 2.0], [3.0, 4.0]];
             let mut input = original.clone();
             let mut p = Processor {
                 rp: realfft::RealFftPlanner::new(),
@@ -333,152 +295,183 @@ mod tests {
             for (orig, recon) in original.iter().zip(reconstructed.iter()) {
                 assert!(
                     (orig - recon).abs() < 1e-10,
-                    "1D Test case {} failed. Original: {}, Reconstructed: {}",
-                    i,
+                    "2D (2x2) test failed. Original: {}, Reconstructed: {}",
+                    orig,
+                    recon
+                );
+            }
+
+            // Test 3x3
+            let original = array![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+            let mut input = original.clone();
+            let mut p = Processor {
+                rp: realfft::RealFftPlanner::new(),
+                rp_origin_len: 0,
+                cp: rustfft::FftPlanner::new(),
+            };
+
+            let mut freq = p.forward(&mut input);
+            let reconstructed = p.backward(&mut freq);
+
+            for (orig, recon) in original.iter().zip(reconstructed.iter()) {
+                assert!(
+                    (orig - recon).abs() < 1e-10,
+                    "2D (3x3) test failed. Original: {}, Reconstructed: {}",
                     orig,
                     recon
                 );
             }
         }
-    }
 
-    #[test]
-    fn test_forward_backward_2d_different_sizes() {
-        // Test various 2D sizes to catch edge cases
-        let original = array![[1.0, 2.0], [3.0, 4.0]];
-        let mut input = original.clone();
-        let mut p = Processor {
-            rp: realfft::RealFftPlanner::new(),
-            rp_origin_len: 0,
-            cp: rustfft::FftPlanner::new(),
-        };
+        #[test]
+        fn large_array() {
+            use ndarray_rand::rand_distr::Uniform;
+            use ndarray_rand::RandomExt;
 
-        let mut freq = p.forward(&mut input);
-        let reconstructed = p.backward(&mut freq);
+            // Test large array that might trigger edge cases
+            let original = Array::random((200, 5000), Uniform::new(0f32, 1f32));
+            let mut input = original.clone();
 
-        for (orig, recon) in original.iter().zip(reconstructed.iter()) {
+            let mut p = Processor {
+                rp: realfft::RealFftPlanner::new(),
+                rp_origin_len: 0,
+                cp: rustfft::FftPlanner::new(),
+            };
+
+            let mut freq = p.forward(&mut input);
+            let reconstructed = p.backward(&mut freq);
+
+            // Check a sample of values
+            let sample_indices = vec![(0, 0), (0, 100), (100, 0), (100, 2500), (199, 4999)];
+            for &(i, j) in &sample_indices {
+                let orig = original[[i, j]];
+                let recon = reconstructed[[i, j]];
+                assert!(
+                    (orig - recon).abs() < 1e-6,
+                    "Large 2D test failed at ({}, {}). Original: {}, Reconstructed: {}, Diff: {}",
+                    i,
+                    j,
+                    orig,
+                    recon,
+                    (orig - recon).abs()
+                );
+            }
+
+            // Check overall statistics
+            let max_diff = original
+                .iter()
+                .zip(reconstructed.iter())
+                .map(|(o, r)| (o - r).abs())
+                .fold(0.0f32, |acc, x| acc.max(x));
+
             assert!(
-                (orig - recon).abs() < 1e-10,
-                "2D Test case failed. Original: {}, Reconstructed: {}",
-                orig,
-                recon
+                max_diff < 1e-6,
+                "Maximum reconstruction error {} exceeds tolerance",
+                max_diff
             );
         }
+    }
 
-        // Test another 2D case
-        let original = array![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
-        let mut input = original.clone();
-        let mut p = Processor {
-            rp: realfft::RealFftPlanner::new(),
-            rp_origin_len: 0,
-            cp: rustfft::FftPlanner::new(),
-        };
+    // ===== 3D Roundtrip Tests =====
 
-        let mut freq = p.forward(&mut input);
-        let reconstructed = p.backward(&mut freq);
+    mod roundtrip_3d {
+        use super::*;
 
-        for (orig, recon) in original.iter().zip(reconstructed.iter()) {
-            assert!(
-                (orig - recon).abs() < 1e-10,
-                "3x3 2D Test case failed. Original: {}, Reconstructed: {}",
-                orig,
-                recon
-            );
+        #[test]
+        fn basic() {
+            let original = array![
+                [[1., 2., 3.], [4., 5., 6.]],
+                [[7., 8., 9.], [10., 11., 12.]],
+            ];
+            let mut input = original.clone();
+
+            let mut p = Processor {
+                rp: realfft::RealFftPlanner::new(),
+                rp_origin_len: 0,
+                cp: rustfft::FftPlanner::new(),
+            };
+
+            let mut a_fft = p.forward(&mut input);
+            let reconstructed = p.backward(&mut a_fft);
+
+            for (orig, recon) in original.iter().zip(reconstructed.iter()) {
+                assert!(
+                    (orig - recon).abs() < 1e-10,
+                    "3D Forward->Backward failed. Original: {}, Reconstructed: {}, Diff: {}",
+                    orig,
+                    recon,
+                    (orig - recon).abs()
+                );
+            }
         }
     }
 
-    #[test]
-    fn test_forward_backward_large_2d() {
-        use ndarray_rand::rand_distr::Uniform;
-        use ndarray_rand::RandomExt;
+    // ===== Low-Level FFT API Tests =====
 
-        // Test the specific size that triggers the error: (200, 5000)
-        let original = Array::random((200, 5000), Uniform::new(0f32, 1f32));
-        let mut input = original.clone();
+    mod fft_api {
+        use super::*;
+        use rustfft::num_complex::Complex;
 
-        let mut p = Processor {
-            rp: realfft::RealFftPlanner::new(),
-            rp_origin_len: 0,
-            cp: rustfft::FftPlanner::new(),
-        };
+        #[test]
+        fn manual_complex_fft_roundtrip() {
+            // Test using rustfft directly to verify FFT planner usage
+            let mut arr = array![[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4],]
+                .map(|&v| Complex::new(v as f32, 0.0));
+            let mut fft = rustfft::FftPlanner::new();
 
-        let mut freq = p.forward(&mut input);
-        let reconstructed = p.backward(&mut freq);
+            // Forward FFT
+            let row_forward = fft.plan_fft_forward(arr.shape()[1]);
+            for mut row in arr.rows_mut() {
+                row_forward.process(row.as_slice_mut().unwrap());
+            }
 
-        // Check a sample of values instead of all to avoid excessive output
-        let sample_indices = vec![(0, 0), (0, 100), (100, 0), (100, 2500), (199, 4999)];
-        for &(i, j) in &sample_indices {
-            let orig = original[[i, j]];
-            let recon = reconstructed[[i, j]];
-            assert!(
-                (orig - recon).abs() < 1e-6, // Slightly relaxed tolerance for large arrays
-                "Large 2D test failed at ({}, {}). Original: {}, Reconstructed: {}, Diff: {}",
-                i,
-                j,
-                orig,
-                recon,
-                (orig - recon).abs()
-            );
+            // Transpose
+            let mut arr = Array::from_shape_vec(
+                [arr.shape()[1], arr.shape()[0]],
+                arr.permuted_axes([1, 0]).iter().copied().collect(),
+            )
+            .unwrap();
+
+            let row_forward = fft.plan_fft_forward(arr.shape()[1]);
+            for mut row in arr.rows_mut() {
+                row_forward.process(row.as_slice_mut().unwrap());
+            }
+
+            arr /= Complex::new(16.0, 0.0);
+
+            // Backward FFT
+            let row_backward = fft.plan_fft_inverse(arr.shape()[1]);
+            for mut row in arr.rows_mut() {
+                row_backward.process(row.as_slice_mut().unwrap());
+            }
+
+            // Transpose back
+            let mut arr = Array::from_shape_vec(
+                [arr.shape()[1], arr.shape()[0]],
+                arr.permuted_axes([1, 0]).iter().copied().collect(),
+            )
+            .unwrap();
+
+            let row_backward = fft.plan_fft_inverse(arr.shape()[1]);
+            for mut row in arr.rows_mut() {
+                row_backward.process(row.as_slice_mut().unwrap());
+            }
+
+            // Verify reconstruction (should be close to original [[1,2,3,4], ...])
+            for val in arr.iter() {
+                let expected_re = val.re.round();
+                assert!(
+                    (val.re - expected_re).abs() < 1e-5,
+                    "FFT roundtrip failed. Got {}, expected approximately {}",
+                    val.re,
+                    expected_re
+                );
+                assert!(
+                    val.im.abs() < 1e-5,
+                    "Imaginary part should be near zero, got {}",
+                    val.im
+                );
+            }
         }
-
-        // Also check overall statistics
-        let max_diff = original
-            .iter()
-            .zip(reconstructed.iter())
-            .map(|(o, r)| (o - r).abs())
-            .fold(0.0f32, |acc, x| acc.max(x));
-
-        assert!(
-            max_diff < 1e-6,
-            "Maximum reconstruction error {} exceeds tolerance",
-            max_diff
-        );
-    }
-
-    #[test]
-    fn test_forward_backward_complex() {
-        let mut arr = array![[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4],]
-            .map(|&v| Complex::new(v as f32, 0.0));
-        let mut fft = rustfft::FftPlanner::new();
-
-        // forward
-        let row_forward = fft.plan_fft_forward(arr.shape()[1]);
-        for mut row in arr.rows_mut() {
-            row_forward.process(row.as_slice_mut().unwrap());
-        }
-
-        // transpose
-        let mut arr = Array::from_shape_vec(
-            [arr.shape()[1], arr.shape()[0]],
-            arr.permuted_axes([1, 0]).iter().copied().collect(),
-        )
-        .unwrap();
-
-        let row_forward = fft.plan_fft_forward(arr.shape()[1]);
-        for mut row in arr.rows_mut() {
-            row_forward.process(row.as_slice_mut().unwrap());
-        }
-
-        arr /= Complex::new(16.0, 0.0);
-
-        // backward
-        let row_backward = fft.plan_fft_inverse(arr.shape()[1]);
-        for mut row in arr.rows_mut() {
-            row_backward.process(row.as_slice_mut().unwrap());
-        }
-
-        // transpose
-        let mut arr = Array::from_shape_vec(
-            [arr.shape()[1], arr.shape()[0]],
-            arr.permuted_axes([1, 0]).iter().copied().collect(),
-        )
-        .unwrap();
-
-        let row_backward = fft.plan_fft_inverse(arr.shape()[1]);
-        for mut row in arr.rows_mut() {
-            row_backward.process(row.as_slice_mut().unwrap());
-        }
-
-        dbg!(arr);
     }
 }
