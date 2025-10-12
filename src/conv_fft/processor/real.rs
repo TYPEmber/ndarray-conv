@@ -194,7 +194,7 @@ mod tests {
 
         #[test]
         fn basic() {
-            let original = array![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+            let original = array![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0];
             let mut input = original.clone();
 
             let mut p = Processor {
@@ -220,7 +220,7 @@ mod tests {
         fn different_sizes() {
             // Test various 1D sizes to catch edge cases
             let test_cases = vec![
-                array![1.0, 2.0],
+                array![1.0f64, 2.0],
                 array![1.0, 2.0, 3.0],
                 array![1.0, 2.0, 3.0, 4.0, 5.0],
             ];
@@ -256,7 +256,7 @@ mod tests {
 
         #[test]
         fn basic() {
-            let original = array![[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]];
+            let original = array![[1.0f64, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]];
             let mut input = original.clone();
 
             let mut p = Processor {
@@ -281,7 +281,7 @@ mod tests {
         #[test]
         fn different_sizes() {
             // Test 2x2
-            let original = array![[1.0, 2.0], [3.0, 4.0]];
+            let original = array![[1.0f64, 2.0], [3.0, 4.0]];
             let mut input = original.clone();
             let mut p = Processor {
                 rp: realfft::RealFftPlanner::new(),
@@ -302,7 +302,7 @@ mod tests {
             }
 
             // Test 3x3
-            let original = array![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
+            let original = array![[1.0f64, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
             let mut input = original.clone();
             let mut p = Processor {
                 rp: realfft::RealFftPlanner::new(),
@@ -380,8 +380,8 @@ mod tests {
         #[test]
         fn basic() {
             let original = array![
-                [[1., 2., 3.], [4., 5., 6.]],
-                [[7., 8., 9.], [10., 11., 12.]],
+                [[1.0f64, 2.0, 3.0], [4.0, 5.0, 6.0]],
+                [[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]],
             ];
             let mut input = original.clone();
 

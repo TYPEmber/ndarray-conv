@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use ndarray::{Array, ArrayBase, DataMut, Dim, IntoDimension, Ix, RemoveAxis};
-use num::{traits::real::Real, Complex};
-use rustfft::{num_complex, num_traits, FftNum};
+use num::Complex;
+use rustfft::FftNum;
 
 pub mod complex;
 pub mod real;

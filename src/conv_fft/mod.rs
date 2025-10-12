@@ -3,28 +3,23 @@
 //! This module offers the `ConvFFTExt` trait, which extends `ndarray`
 //! with FFT-based convolution methods.
 
-use std::{fmt::Debug, marker::PhantomData};
+use std::fmt::Debug;
 
 use ndarray::{
     Array, ArrayBase, Data, Dim, IntoDimension, Ix, RawData, RemoveAxis, SliceArg, SliceInfo,
     SliceInfoElem,
 };
-use num::{traits::NumAssign, Complex};
+use num::traits::NumAssign;
 use rustfft::FftNum;
 
-use crate::{
-    conv::ExplicitConv,
-    conv_fft::processor::{real, ConvFftNum},
-    dilation::IntoKernelWithDilation,
-    ConvMode, PaddingMode,
-};
+use crate::{dilation::IntoKernelWithDilation, ConvMode, PaddingMode};
 
 mod good_size;
 mod padding;
 mod processor;
 
 // pub use fft::Processor;
-pub use processor::{Processor, GetProcessor, get as get_processor};
+pub use processor::{get as get_processor, GetProcessor, Processor};
 
 // /// Represents a "baked" convolution operation.
 // ///
