@@ -459,119 +459,310 @@ mod tests {
     use crate::dilation::IntoKernelWithDilation;
     use crate::ConvMode;
 
-    #[test]
-    fn index_axis() {
-        let mut arr = array![[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
-        let mut sub = dbg!(arr.index_axis_mut(Axis(2), 0));
+    // ===== Basic Padding Tests =====
 
-        sub += &array![[1, 1], [1, 1]];
+    mod zeros_padding {
+        use super::*;
 
-        dbg!(&arr);
+        #[test]
+        fn test_1d() {
+            let arr = array![1, 2, 3];
+            let explicit_padding = [[1, 1]];
+            let padded = arr.padding(PaddingMode::Zeros, explicit_padding);
+            assert_eq!(padded, array![0, 1, 2, 3, 0]);
+        }
 
-        assert_eq!(arr, array![[[2, 2], [4, 4]], [[6, 6], [8, 8]]]);
+        #[test]
+        fn test_2d() {
+            let arr = array![[1, 2], [3, 4]];
+            let explicit_padding = [[1, 1], [1, 1]];
+            let padded = arr.padding(PaddingMode::Zeros, explicit_padding);
+            assert_eq!(
+                padded,
+                array![[0, 0, 0, 0], [0, 1, 2, 0], [0, 3, 4, 0], [0, 0, 0, 0]]
+            );
+        }
+
+        #[test]
+        fn test_3d() {
+            let arr = array![[[1, 2]], [[3, 4]]];
+            let explicit_padding = [[1, 0], [0, 1], [1, 0]];
+            let padded = arr.padding(PaddingMode::Zeros, explicit_padding);
+            // Shape: [2, 1, 2] -> [3, 2, 3]
+            // dim 0: padding [1, 0] => add 1 layer before
+            // dim 1: padding [0, 1] => add 1 layer after
+            // dim 2: padding [1, 0] => add 1 column before each row
+            assert_eq!(
+                padded,
+                array![
+                    [[0, 0, 0], [0, 0, 0]], // padded layer at front (dim 0)
+                    [[0, 1, 2], [0, 0, 0]], // original [[[1, 2]]] with padding
+                    [[0, 3, 4], [0, 0, 0]]  // original [[[3, 4]]] with padding
+                ]
+            );
+        }
+
+        #[test]
+        fn test_asymmetric_padding() {
+            let arr = array![1, 2, 3];
+            let explicit_padding = [[2, 1]];
+            let padded = arr.padding(PaddingMode::Zeros, explicit_padding);
+            assert_eq!(padded, array![0, 0, 1, 2, 3, 0]);
+        }
     }
 
-    // #[test]
-    // fn padding_replicate() {
-    //     let arr = array![[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
-    //     let kernel = array![
-    //         [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-    //         [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-    //         [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
-    //     ];
+    mod const_padding {
+        use super::*;
 
-    //     let explicit_conv = ConvMode::Full.unfold(&kernel.into_kernel_with_dilation());
-    //     let explicit_padding = explicit_conv.padding;
-    //     let arr_padded = arr.padding(PaddingMode::Replicate, explicit_padding);
-    //     dbg!(arr_padded);
+        #[test]
+        fn test_1d() {
+            let arr = array![1, 2, 3];
+            let explicit_padding = [[1, 1]];
+            let padded = arr.padding(PaddingMode::Const(7), explicit_padding);
+            assert_eq!(padded, array![7, 1, 2, 3, 7]);
+        }
 
-    //     let arr = array![[1, 2], [3, 4]];
-    //     let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
-
-    //     let explicit_conv = ConvMode::Full.unfold(&kernel.into_kernel_with_dilation());
-    //     let explicit_padding = explicit_conv.padding;
-    //     let arr_padded = arr.padding(PaddingMode::Const(7), explicit_padding);
-    //     dbg!(arr_padded);
-
-    //     let arr = array![1, 2, 3];
-    //     let kernel = array![1, 1, 1, 1];
-
-    //     let explicit_conv = ConvMode::Same.unfold(&kernel.into_kernel_with_dilation());
-    //     let explicit_padding = explicit_conv.padding;
-    //     let arr_padded = arr.padding(PaddingMode::Zeros, explicit_padding);
-    //     dbg!(arr_padded);
-    // }
-
-    #[test]
-    fn padding_custom() {
-        let arr = array![[1, 2], [3, 4]];
-        let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
-        let kernel = kernel.into_kernel_with_dilation();
-
-        let explicit_conv = ConvMode::Full.unfold(&kernel);
-        let explicit_padding = explicit_conv.padding;
-        let arr_padded = arr.padding(
-            PaddingMode::Custom([BorderType::Replicate, BorderType::Circular]),
-            explicit_padding,
-        );
-        assert_eq!(
-            arr_padded,
-            array![
-                [1, 2, 1, 2, 1, 2],
-                [1, 2, 1, 2, 1, 2],
-                [1, 2, 1, 2, 1, 2],
-                [3, 4, 3, 4, 3, 4],
-                [3, 4, 3, 4, 3, 4],
-                [3, 4, 3, 4, 3, 4]
-            ]
-        );
-
-        let explicit_conv = ConvMode::Full.unfold(&kernel);
-        let explicit_padding = explicit_conv.padding;
-        let arr_padded = arr.padding(
-            PaddingMode::Custom([BorderType::Reflect, BorderType::Const(7)]),
-            explicit_padding,
-        );
-        assert_eq!(
-            arr_padded,
-            array![
-                [7, 7, 0, 0, 7, 7],
-                [7, 7, 3, 4, 7, 7],
-                [7, 7, 1, 2, 7, 7],
-                [7, 7, 3, 4, 7, 7],
-                [7, 7, 1, 2, 7, 7],
-                [7, 7, 3, 4, 7, 7]
-            ]
-        );
-
-        dbg!(arr_padded);
+        #[test]
+        fn test_2d() {
+            let arr = array![[1, 2], [3, 4]];
+            let explicit_padding = [[1, 1], [1, 1]];
+            let padded = arr.padding(PaddingMode::Const(9), explicit_padding);
+            assert_eq!(
+                padded,
+                array![[9, 9, 9, 9], [9, 1, 2, 9], [9, 3, 4, 9], [9, 9, 9, 9]]
+            );
+        }
     }
 
-    #[test]
-    fn tch_example() {
-        let arr =
-            tch::Tensor::from_slice2(&[[1, 2, 3], [3, 4, 5], [5, 6, 7]]).reshape([1, 1, 3, 3]);
-        let arr_padded = arr
-            .f_conv2d_padding(
-                &tch::Tensor::from_slice2(&[[0, 0, 0], [0, 1, 0], [0, 0, 0]]).reshape([1, 1, 3, 3]),
-                Option::<tch::Tensor>::None,
-                [1],
-                "same",
-                [1],
-                1,
-            )
-            .unwrap();
-        dbg!(&arr, &arr_padded);
+    mod replicate_padding {
+        use super::*;
 
-        let arr = tch::Tensor::from_slice2(&[[1., 2.], [3., 4.]]).reshape([1, 1, 2, 2]);
-        let arr_padded = arr.f_pad([1, 1, 1, 1], "circular", None).unwrap();
+        #[test]
+        fn test_1d() {
+            let arr = array![1, 2, 3];
+            let explicit_padding = [[1, 2]];
+            let padded = arr.padding(PaddingMode::Replicate, explicit_padding);
+            assert_eq!(padded, array![1, 1, 2, 3, 3, 3]);
+        }
 
-        arr.print();
-        arr_padded.print();
+        #[test]
+        fn test_2d() {
+            let arr = array![[1, 2], [3, 4]];
+            let explicit_padding = [[1, 1], [1, 1]];
+            let padded = arr.padding(PaddingMode::Replicate, explicit_padding);
+            assert_eq!(
+                padded,
+                array![[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]
+            );
+        }
+
+        #[test]
+        fn test_large_padding() {
+            let arr = array![1, 2];
+            let explicit_padding = [[3, 3]];
+            let padded = arr.padding(PaddingMode::Replicate, explicit_padding);
+            assert_eq!(padded, array![1, 1, 1, 1, 2, 2, 2, 2]);
+        }
     }
+
+    mod reflect_padding {
+        use super::*;
+
+        #[test]
+        fn test_1d() {
+            let arr = array![1, 2, 3, 4];
+            let explicit_padding = [[2, 2]];
+            let padded = arr.padding(PaddingMode::Reflect, explicit_padding);
+            assert_eq!(padded, array![3, 2, 1, 2, 3, 4, 3, 2]);
+        }
+
+        #[test]
+        fn test_2d() {
+            let arr = array![[1, 2, 3], [4, 5, 6]];
+            let explicit_padding = [[1, 1], [1, 1]];
+            let padded = arr.padding(PaddingMode::Reflect, explicit_padding);
+            assert_eq!(
+                padded,
+                array![
+                    [5, 4, 5, 6, 5],
+                    [2, 1, 2, 3, 2],
+                    [5, 4, 5, 6, 5],
+                    [2, 1, 2, 3, 2]
+                ]
+            );
+        }
+    }
+
+    mod circular_padding {
+        use super::*;
+
+        #[test]
+        fn test_1d() {
+            let arr = array![1, 2, 3, 4];
+            let explicit_padding = [[2, 2]];
+            let padded = arr.padding(PaddingMode::Circular, explicit_padding);
+            assert_eq!(padded, array![3, 4, 1, 2, 3, 4, 1, 2]);
+        }
+
+        #[test]
+        fn test_2d() {
+            let arr = array![[1, 2], [3, 4]];
+            let explicit_padding = [[1, 1], [1, 1]];
+            let padded = arr.padding(PaddingMode::Circular, explicit_padding);
+            assert_eq!(
+                padded,
+                array![[4, 3, 4, 3], [2, 1, 2, 1], [4, 3, 4, 3], [2, 1, 2, 1]]
+            );
+        }
+
+        #[test]
+        fn test_type_cast_safety() {
+            // Regression test for issue with type casting in circular padding
+            let arr = array![1u8, 2, 3];
+            let explicit_padding = [[1, 1]];
+            let padded = arr.padding(PaddingMode::Circular, explicit_padding);
+            assert_eq!(padded, array![3u8, 1, 2, 3, 1]);
+        }
+    }
+
+    mod custom_padding {
+        use super::*;
+
+        #[test]
+        fn test_per_dimension() {
+            let arr = array![[1, 2], [3, 4]];
+            let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
+            let kernel = kernel.into_kernel_with_dilation();
+
+            let explicit_conv = ConvMode::Full.unfold(&kernel);
+            let explicit_padding = explicit_conv.padding;
+
+            let arr_padded = arr.padding(
+                PaddingMode::Custom([BorderType::Replicate, BorderType::Circular]),
+                explicit_padding,
+            );
+            assert_eq!(
+                arr_padded,
+                array![
+                    [1, 2, 1, 2, 1, 2],
+                    [1, 2, 1, 2, 1, 2],
+                    [1, 2, 1, 2, 1, 2],
+                    [3, 4, 3, 4, 3, 4],
+                    [3, 4, 3, 4, 3, 4],
+                    [3, 4, 3, 4, 3, 4]
+                ]
+            );
+        }
+
+        #[test]
+        fn test_mixed_types() {
+            let arr = array![[1, 2], [3, 4]];
+            let kernel = array![[1, 1, 1], [1, 1, 1], [1, 1, 1]];
+            let kernel = kernel.into_kernel_with_dilation();
+
+            let explicit_conv = ConvMode::Full.unfold(&kernel);
+            let explicit_padding = explicit_conv.padding;
+
+            let arr_padded = arr.padding(
+                PaddingMode::Custom([BorderType::Reflect, BorderType::Const(7)]),
+                explicit_padding,
+            );
+            assert_eq!(
+                arr_padded,
+                array![
+                    [7, 7, 0, 0, 7, 7],
+                    [7, 7, 3, 4, 7, 7],
+                    [7, 7, 1, 2, 7, 7],
+                    [7, 7, 3, 4, 7, 7],
+                    [7, 7, 1, 2, 7, 7],
+                    [7, 7, 3, 4, 7, 7]
+                ]
+            );
+        }
+    }
+
+    mod explicit_padding {
+        use super::*;
+
+        #[test]
+        fn test_per_side() {
+            let arr = array![1, 2, 3];
+            let explicit_padding = [[1, 2]];
+
+            // Use different BorderType for each side
+            let padded = arr.padding(
+                PaddingMode::Explicit([[BorderType::Const(7), BorderType::Const(9)]]),
+                explicit_padding,
+            );
+            assert_eq!(padded, array![7, 1, 2, 3, 9, 9]);
+        }
+    }
+
+    // ===== Edge Cases =====
+
+    mod edge_cases {
+        use super::*;
+
+        #[test]
+        fn test_zero_padding() {
+            let arr = array![1, 2, 3];
+            let explicit_padding = [[0, 0]];
+            let padded = arr.padding(PaddingMode::Zeros, explicit_padding);
+            assert_eq!(padded, arr);
+        }
+
+        #[test]
+        fn test_single_element() {
+            let arr = array![42];
+            let explicit_padding = [[2, 2]];
+            let padded = arr.padding(PaddingMode::Replicate, explicit_padding);
+            assert_eq!(padded, array![42, 42, 42, 42, 42]);
+        }
+
+        #[test]
+        fn test_large_array() {
+            let arr = Array::from_shape_fn((100, 100), |(i, j)| (i + j) as i32);
+            let explicit_padding = [[5, 5], [5, 5]];
+            let padded = arr.padding(PaddingMode::Zeros, explicit_padding);
+
+            // Verify shape
+            assert_eq!(padded.shape(), &[110, 110]);
+
+            // Verify padding is zeros
+            // Top padding
+            for i in 0..5 {
+                for j in 0..110 {
+                    assert_eq!(padded[[i, j]], 0);
+                }
+            }
+            // Bottom padding
+            for i in 105..110 {
+                for j in 0..110 {
+                    assert_eq!(padded[[i, j]], 0);
+                }
+            }
+            // Left and right padding (middle rows)
+            for i in 5..105 {
+                for j in 0..5 {
+                    assert_eq!(padded[[i, j]], 0);
+                }
+                for j in 105..110 {
+                    assert_eq!(padded[[i, j]], 0);
+                }
+            }
+
+            // Verify original data is preserved
+            assert_eq!(padded[[5, 5]], arr[[0, 0]]); // top-left
+            assert_eq!(padded[[54, 54]], arr[[49, 49]]); // middle
+            assert_eq!(padded[[104, 104]], arr[[99, 99]]); // bottom-right
+        }
+    }
+
+    // ===== Torch Verification Tests =====
 
     #[test]
     fn aligned_with_libtorch() {
+        // Test all padding modes against torch for 3D
         let arr = array![[[1, 2, 3], [3, 4, 5]], [[5, 6, 7], [7, 8, 9]]];
         let kernel = array![
             [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
@@ -586,6 +777,7 @@ mod tests {
         check(&arr, PaddingMode::Reflect, explicit_padding);
         check(&arr, PaddingMode::Circular, explicit_padding);
 
+        // Test all padding modes against torch for 2D
         let arr = array![[1, 2], [3, 4]];
         let kernel = array![[1, 1], [1, 1]];
         let explicit_conv = ConvMode::Full.unfold(&kernel.into_kernel_with_dilation());
@@ -596,6 +788,7 @@ mod tests {
         check(&arr, PaddingMode::Reflect, explicit_padding);
         check(&arr, PaddingMode::Circular, explicit_padding);
 
+        // Test all padding modes against torch for 1D
         let arr = array![1, 2, 3];
         let kernel = array![1, 1, 1, 1];
         let explicit_conv = ConvMode::Same.unfold(&kernel.into_kernel_with_dilation());
@@ -657,7 +850,7 @@ mod tests {
         tensor_result.print();
 
         assert_eq!(
-            ndarray_result.into_raw_vec(),
+            ndarray_result.into_raw_vec_and_offset().0,
             tensor_result
                 .reshape(tensor_result.size().iter().product::<i64>())
                 .iter::<f64>()
