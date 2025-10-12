@@ -15,7 +15,7 @@ macro_rules! impl_conv_fft_num {
     };
 }
 
-impl_conv_fft_num!(i8, i16, i32, isize, f32, f64);
+impl_conv_fft_num!(i8, i16, i32, i64, i128, isize, f32, f64);
 
 pub fn get<T: FftNum, InElem: GetProcessor<T, InElem>>() -> impl Processor<T, InElem> {
     InElem::get_processor()
