@@ -22,6 +22,7 @@ pocketfft (https://github.com/mreineck/pocketfft)
 - [x] handle input size error
 - [x] explict error type
 - [x] bench with similar libs
+- [ ] support `Complex<T>`
 - [ ] conv with GPU acceleration for N dimension `Array`/`ArrayView` via `wgpu`
 
 ## Examples
@@ -122,13 +123,14 @@ fftconvolve_2d          time:   [56.273 ms 56.342 ms 56.420 ms]
 let x = Array::random((10, 100, 200), Uniform::new(0f32, 1.));
 let k = Array::random((5, 11, 31), Uniform::new(0f32, 1.));
 
-fft_3d                  time:   [5.3049 ms 5.3498 ms 5.3957 ms]
-fft_with_processor_3d   time:   [5.2981 ms 5.3345 ms 5.3696 ms]
-torch_3d                time:   [147.20 ms 151.97 ms 158.54 ms]
+fft_3d                  time:   [4.6476 ms 4.6651 ms 4.6826 ms]
+fft_with_processor_3d   time:   [4.6393 ms 4.6575 ms 4.6754 ms]
+torch_3d                time:   [160.73 ms 161.12 ms 161.56 ms]
 fftconvolve_3d          time:   [11.991 ms 12.009 ms 12.031 ms]
 ```
 
 ## Versions
+- 0.5.1 - Add support for Complex<T>. Complete unit tests. Improve performance.
 - 0.5.0 - **[breaking change]** Add `ReverseKernel` trait for cross-correlation, make `conv` & `conv_fft` calculating mathematical convolution. 
 - 0.4.2 - Remove `Debug` trait on `T`.
 - 0.4.1 - Doc update.
