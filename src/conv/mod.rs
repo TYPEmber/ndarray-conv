@@ -88,12 +88,25 @@ where
     ///
     /// # Arguments
     ///
-    /// *   `kernel`: The convolution kernel.
+    /// *   `kernel`: The convolution kernel. Can be a reference to an array, or an array with dilation settings created using `with_dilation()`.
     /// *   `conv_mode`: The convolution mode (`Full`, `Same`, `Valid`, `Custom`, `Explicit`).
     /// *   `padding_mode`: The padding mode (`Zeros`, `Const`, `Reflect`, `Replicate`, `Circular`, `Custom`, `Explicit`).
     ///
     /// # Returns
     ///
+    /// Returns `Ok(Array<T, Dim<[Ix; N]>>)` containing the convolution result, or an `Err(Error<N>)` if the operation fails
+    /// (e.g., due to incompatible shapes or zero-sized dimensions).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use ndarray::array;
+    /// use ndarray_conv::{ConvExt, ConvMode, PaddingMode};
+    ///
+    /// let input = array![[1, 2, 3], [4, 5, 6]];
+    /// let kernel = array![[1, 1], [1, 1]];
+    /// let result = input.conv(&kernel, ConvMode::Same, PaddingMode::Zeros).unwrap();
+    /// ```
     fn conv(
         &self,
         kernel: impl IntoKernelWithDilation<'a, SK, N>,

@@ -80,7 +80,37 @@ impl<const N: usize> IntoDilation<N> for [usize; N] {
 }
 
 /// Trait for adding dilation information to a kernel.
+///
+/// Dilation is a parameter that controls the spacing between kernel elements
+/// during convolution. A dilation of 1 means no spacing (standard convolution),
+/// while larger values insert gaps between kernel elements.
+///
+/// # Example
+///
+/// ```rust
+/// use ndarray::array;
+/// use ndarray_conv::{WithDilation, ConvExt, ConvMode, PaddingMode};
+///
+/// let input = array![1, 2, 3, 4, 5];
+/// let kernel = array![1, 1, 1];
+///
+/// // Standard convolution (dilation = 1)
+/// let result1 = input.conv(&kernel, ConvMode::Same, PaddingMode::Zeros).unwrap();
+///
+/// // Dilated convolution (dilation = 2)
+/// let result2 = input.conv(kernel.with_dilation(2), ConvMode::Same, PaddingMode::Zeros).unwrap();
+/// ```
 pub trait WithDilation<S: RawData, const N: usize> {
+    /// Adds dilation information to the kernel.
+    ///
+    /// # Arguments
+    ///
+    /// * `dilation`: The dilation factor(s). Can be a single value (applied to all dimensions)
+    ///   or an array of values (one per dimension).
+    ///
+    /// # Returns
+    ///
+    /// A `KernelWithDilation` instance containing the kernel and dilation information.
     fn with_dilation(&self, dilation: impl IntoDilation<N>) -> KernelWithDilation<'_, S, N>;
 }
 
@@ -95,8 +125,43 @@ impl<S: RawData, const N: usize> WithDilation<S, N> for ArrayBase<S, Dim<[Ix; N]
     }
 }
 
+/// Trait for controlling kernel reversal behavior in convolution operations.
+///
+/// In standard convolution, the kernel is reversed (flipped) along all axes.
+/// This trait allows you to control whether the kernel should be reversed or not.
+///
+/// # Convolution vs Cross-Correlation
+///
+/// * **Convolution** (default, `reverse()`): The kernel is reversed, which is the mathematical definition of convolution.
+/// * **Cross-correlation** (`no_reverse()`): The kernel is NOT reversed. This is commonly used in machine learning frameworks.
+///
+/// # Example
+///
+/// ```rust
+/// use ndarray::array;
+/// use ndarray_conv::{WithDilation, ReverseKernel, ConvExt, ConvMode, PaddingMode};
+///
+/// let input = array![1, 2, 3, 4, 5];
+/// let kernel = array![1, 2, 3];
+///
+/// // Standard convolution (kernel is reversed)
+/// let result1 = input.conv(&kernel, ConvMode::Same, PaddingMode::Zeros).unwrap();
+/// // Equivalent to:
+/// let result1_explicit = input.conv(kernel.reverse(), ConvMode::Same, PaddingMode::Zeros).unwrap();
+///
+/// // Cross-correlation (kernel is NOT reversed)
+/// let result2 = input.conv(kernel.no_reverse(), ConvMode::Same, PaddingMode::Zeros).unwrap();
+/// ```
 pub trait ReverseKernel<'a, S: RawData, const N: usize> {
+    /// Explicitly enables kernel reversal (standard convolution).
+    ///
+    /// This is the default behavior, so calling this method is usually not necessary.
     fn reverse(self) -> KernelWithDilation<'a, S, N>;
+
+    /// Disables kernel reversal (cross-correlation).
+    ///
+    /// Use this when you want the kernel to be applied without flipping,
+    /// which is common in machine learning applications.
     fn no_reverse(self) -> KernelWithDilation<'a, S, N>;
 }
 

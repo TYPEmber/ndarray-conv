@@ -50,16 +50,15 @@ pub use processor::{get as get_processor, GetProcessor, Processor};
 ///
 /// # Type Parameters
 ///
-/// *   `T`: The numeric type of the array elements. Must be a floating-point type that implements `FftNum`.
+/// *   `T`: The numeric type used internally for FFT operations. Must be a floating-point type that implements `FftNum`.
+/// *   `InElem`: The element type of the input arrays. Can be real (`T`) or complex (`Complex<T>`).
 /// *   `S`: The data storage type of the input array.
 /// *   `SK`: The data storage type of the kernel array.
 ///
 /// # Methods
 ///
 /// *   `conv_fft`: Performs an FFT-accelerated convolution with default settings.
-/// *   `conv_fft_with_processor`: Performs an FFT-accelerated convolution using a provided `Processor` instance, allowing for reuse of FFT plans and scratch space.
-/// *   `conv_fft_bake`: Precomputes and stores necessary data for performing repeated convolutions in the form of `Baked`.
-/// *   `conv_fft_with_baked`: Performs a convolution with the provided `Baked` data.
+/// *   `conv_fft_with_processor`: Performs an FFT-accelerated convolution using a provided `Processor` instance, allowing for reuse of FFT plans across multiple convolutions for better performance.
 ///
 /// # Example
 ///
@@ -75,6 +74,12 @@ pub use processor::{get as get_processor, GetProcessor, Processor};
 /// # Notes
 ///
 /// FFT-based convolutions are generally faster for larger kernels but may have higher overhead for smaller kernels.
+/// Use standard convolution (`ConvExt::conv`) for small kernels or when working with integer types.
+///
+/// # Performance Tips
+///
+/// For repeated convolutions with different data but the same kernel and settings, consider using
+/// `conv_fft_with_processor` to reuse the FFT planner and avoid redundant setup overhead.
 pub trait ConvFFTExt<'a, T, InElem, S, SK, const N: usize>
 where
     T: NumAssign + Copy + FftNum,
@@ -82,6 +87,31 @@ where
     S: RawData,
     SK: RawData,
 {
+    /// Performs an FFT-accelerated convolution operation.
+    ///
+    /// This method convolves the input array with a given kernel using FFT,
+    /// which is typically faster for larger kernels.
+    ///
+    /// # Arguments
+    ///
+    /// * `kernel`: The convolution kernel. Can be a reference to an array, or an array with dilation settings.
+    /// * `conv_mode`: The convolution mode (`Full`, `Same`, `Valid`, `Custom`, `Explicit`).
+    /// * `padding_mode`: The padding mode (`Zeros`, `Const`, `Reflect`, `Replicate`, `Circular`, `Custom`, `Explicit`).
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(Array<InElem, Dim<[Ix; N]>>)` containing the convolution result, or an `Err(Error<N>)` if the operation fails.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use ndarray::array;
+    /// use ndarray_conv::{ConvFFTExt, ConvMode, PaddingMode};
+    ///
+    /// let input = array![[1.0, 2.0], [3.0, 4.0]];
+    /// let kernel = array![[1.0, 0.0], [0.0, 1.0]];
+    /// let result = input.conv_fft(&kernel, ConvMode::Same, PaddingMode::Zeros).unwrap();
+    /// ```
     fn conv_fft(
         &self,
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
@@ -89,6 +119,37 @@ where
         padding_mode: PaddingMode<N, InElem>,
     ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>;
 
+    /// Performs an FFT-accelerated convolution using a provided processor.
+    ///
+    /// This method is useful when performing multiple convolutions, as it allows
+    /// reusing the FFT planner and avoiding redundant initialization overhead.
+    ///
+    /// # Arguments
+    ///
+    /// * `kernel`: The convolution kernel.
+    /// * `conv_mode`: The convolution mode.
+    /// * `padding_mode`: The padding mode.
+    /// * `fft_processor`: A mutable reference to an FFT processor instance.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(Array<InElem, Dim<[Ix; N]>>)` containing the convolution result, or an `Err(Error<N>)` if the operation fails.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use ndarray::array;
+    /// use ndarray_conv::{ConvFFTExt, ConvMode, PaddingMode, get_fft_processor};
+    ///
+    /// let input1 = array![[1.0, 2.0], [3.0, 4.0]];
+    /// let input2 = array![[5.0, 6.0], [7.0, 8.0]];
+    /// let kernel = array![[1.0, 0.0], [0.0, 1.0]];
+    ///
+    /// // Reuse the same processor for multiple convolutions
+    /// let mut proc = get_fft_processor::<f32, f32>();
+    /// let result1 = input1.conv_fft_with_processor(&kernel, ConvMode::Same, PaddingMode::Zeros, &mut proc).unwrap();
+    /// let result2 = input2.conv_fft_with_processor(&kernel, ConvMode::Same, PaddingMode::Zeros, &mut proc).unwrap();
+    /// ```
     fn conv_fft_with_processor(
         &self,
         kernel: impl IntoKernelWithDilation<'a, SK, N>,
