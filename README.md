@@ -22,7 +22,7 @@ pocketfft (https://github.com/mreineck/pocketfft)
 - [x] handle input size error
 - [x] explict error type
 - [x] bench with similar libs
-- [ ] support `Complex<T>`
+- [x] support `Complex<T>`
 - [ ] conv with GPU acceleration for N dimension `Array`/`ArrayView` via `wgpu`
 
 ## Examples
