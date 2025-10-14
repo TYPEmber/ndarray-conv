@@ -3,8 +3,6 @@
 //! This module offers the `ConvFFTExt` trait, which extends `ndarray`
 //! with FFT-based convolution methods.
 
-use std::fmt::Debug;
-
 use ndarray::{
     Array, ArrayBase, Data, Dim, IntoDimension, Ix, RawData, RemoveAxis, SliceArg, SliceInfo,
     SliceInfoElem,
@@ -172,7 +170,7 @@ impl<'a, T, InElem, S, SK, const N: usize> ConvFFTExt<'a, T, InElem, S, SK, N>
     for ArrayBase<S, Dim<[Ix; N]>>
 where
     T: NumAssign + FftNum,
-    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy + Debug,
+    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy,
     S: Data<Elem = InElem> + 'a,
     SK: Data<Elem = InElem> + 'a,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,

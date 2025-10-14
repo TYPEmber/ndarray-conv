@@ -72,7 +72,9 @@ mod padding;
 pub(crate) use padding::ExplicitPadding;
 
 pub use conv::ConvExt;
-pub use conv_fft::{get_processor as get_fft_processor, ConvFFTExt, Processor as FftProcessor};
+pub use conv_fft::{
+    get_processor as get_fft_processor, ConvFFTExt, GetProcessor, Processor as FftProcessor,
+};
 pub use dilation::{ReverseKernel, WithDilation};
 
 /// Specifies the convolution mode, which determines the output size.

@@ -4,8 +4,6 @@
 //! appropriate sizes for efficient FFT calculations. Padding is
 //! crucial for correctly implementing convolution via FFT.
 
-use std::fmt::Debug;
-
 use ndarray::{
     Array, ArrayBase, Data, Dim, IntoDimension, Ix, RemoveAxis, SliceArg, SliceInfo, SliceInfoElem,
 };
@@ -36,7 +34,7 @@ pub fn data<T, S, const N: usize>(
     fft_size: [usize; N],
 ) -> Array<T, Dim<[Ix; N]>>
 where
-    T: NumAssign + Copy + Debug,
+    T: NumAssign + Copy,
     S: Data<Elem = T>,
     Dim<[Ix; N]>: RemoveAxis,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
@@ -82,7 +80,7 @@ pub fn kernel<'a, T, S, const N: usize>(
     fft_size: [usize; N],
 ) -> Array<T, Dim<[Ix; N]>>
 where
-    T: NumAssign + Copy + Debug + 'a,
+    T: NumAssign + Copy + 'a,
     S: Data<Elem = T>,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     Dim<[Ix; N]>: RemoveAxis,
