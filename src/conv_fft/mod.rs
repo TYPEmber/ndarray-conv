@@ -170,7 +170,7 @@ impl<'a, T, InElem, S, SK, const N: usize> ConvFFTExt<'a, T, InElem, S, SK, N>
     for ArrayBase<S, Dim<[Ix; N]>>
 where
     T: NumAssign + FftNum,
-    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy,
+    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy + 'a,
     S: Data<Elem = InElem> + 'a,
     SK: Data<Elem = InElem> + 'a,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
