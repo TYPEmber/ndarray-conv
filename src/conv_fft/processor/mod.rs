@@ -42,19 +42,6 @@ impl_conv_fft_num!(i8, i16, i32, i64, i128, isize, f32, f64);
 ///
 /// * `T`: The FFT numeric type (typically f32 or f64)
 /// * `InElem`: The input element type (`T` for real, `Complex<T>` for complex)
-///
-/// # Example
-///
-/// ```rust
-/// use ndarray_conv::GetProcessor;
-///
-/// // Get a processor for f32 real values
-/// let mut proc = GetProcessor::<f32, f32>::get_processor();
-///
-/// // Get a processor for Complex<f32> values
-/// use num::Complex;
-/// let mut proc_complex = GetProcessor::<f32, Complex<f32>>::get_processor();
-/// ```
 pub fn get<T: FftNum, InElem: GetProcessor<T, InElem>>() -> impl Processor<T, InElem> {
     InElem::get_processor()
 }

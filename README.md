@@ -130,6 +130,7 @@ fftconvolve_3d          time:   [11.991 ms 12.009 ms 12.031 ms]
 ```
 
 ## Versions
+- 0.6.0 - Dependecy update: update ndarray from 0.16 to >=0.17.
 - 0.5.3 - Buf fix: error handling for kernel shape in convolution operation. Export GetProcessor as public trait for external consumer
 - 0.5.2 - Doc update.
 - 0.5.1 - Add support for Complex<T>. Complete unit tests. Improve performance.

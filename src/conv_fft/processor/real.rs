@@ -329,7 +329,7 @@ mod tests {
             use ndarray_rand::RandomExt;
 
             // Test large array that might trigger edge cases
-            let original = Array::random((200, 5000), Uniform::new(0f32, 1f32));
+            let original = Array::random((200, 5000), Uniform::new(0f32, 1f32).unwrap());
             let mut input = original.clone();
 
             let mut p = Processor {

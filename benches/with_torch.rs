@@ -8,8 +8,8 @@ use num::Complex;
 
 /// Benchmark for 1D convolution using `conv_fft` with various libraries.
 fn criterion_benchmark(c: &mut Criterion) {
-    let x = Array::random(5000, Uniform::new(0f32, 1.));
-    let k = Array::random(31, Uniform::new(0f32, 1.));
+    let x = Array::random(5000, Uniform::new(0f32, 1.).unwrap());
+    let k = Array::random(31, Uniform::new(0f32, 1.).unwrap());
 
     let x_crs = x.to_shape((1, 1, 5000)).unwrap().to_owned();
     let k_crs = k.to_shape((1, 1, 1, 31)).unwrap().to_owned();
@@ -71,8 +71,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     //     b.iter(|| fftconvolve::fftconvolve(&x, &k, fftconvolve::Mode::Same))
     // });
 
-    let x = Array::random((200, 5000), Uniform::new(0f32, 1.));
-    let k = Array::random((11, 31), Uniform::new(0f32, 1.));
+    let x = Array::random((200, 5000), Uniform::new(0f32, 1.).unwrap());
+    let k = Array::random((11, 31), Uniform::new(0f32, 1.).unwrap());
 
     let x_crs = x.to_shape((1, 200, 5000)).unwrap().to_owned();
     let k_crs = k.to_shape((1, 1, 11, 31)).unwrap().to_owned();
@@ -125,8 +125,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     //     b.iter(|| fftconvolve::fftconvolve(&x, &k, fftconvolve::Mode::Same))
     // });
 
-    let x = Array::random((10, 100, 200), Uniform::new(0f32, 1.));
-    let k = Array::random((5, 11, 31), Uniform::new(0f32, 1.));
+    let x = Array::random((10, 100, 200), Uniform::new(0f32, 1.).unwrap());
+    let k = Array::random((5, 11, 31), Uniform::new(0f32, 1.).unwrap());
 
     let x_crs = x.to_shape((10, 100, 200)).unwrap().to_owned();
     let k_crs = k.to_shape((1, 5, 11, 31)).unwrap().to_owned();
