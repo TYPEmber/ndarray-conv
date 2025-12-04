@@ -140,7 +140,7 @@ where
 
         let kernel_raw_dim = kwd.kernel.raw_dim();
         if kwd.kernel.shape().iter().product::<usize>() == 0 {
-            return Err(crate::Error::DataShape(kernel_raw_dim));
+            return Err(crate::Error::KernelShape(kernel_raw_dim));
         }
 
         let kernel_raw_dim_with_dilation: [usize; N] =
