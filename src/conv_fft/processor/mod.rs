@@ -10,6 +10,32 @@ use ndarray::{Array, ArrayBase, DataMut, Dim, IntoDimension, Ix, RemoveAxis};
 use num::Complex;
 use rustfft::FftNum;
 
+/// When the `rayon` feature is enabled, processors must be `Send` so they can
+/// be used across thread boundaries.  Without rayon there is no such requirement.
+/// This trait provides the conditional bound without duplicating any code.
+#[cfg(feature = "rayon")]
+pub trait MaybeSend: Send {}
+#[cfg(feature = "rayon")]
+impl<T: Send> MaybeSend for T {}
+
+#[cfg(not(feature = "rayon"))]
+pub trait MaybeSend {}
+#[cfg(not(feature = "rayon"))]
+impl<T> MaybeSend for T {}
+
+/// Same pattern as [`MaybeSend`] but for `Sync`.
+/// Required so that shared references to data/kernel arrays can cross thread
+/// boundaries inside `rayon::join` closures.
+#[cfg(feature = "rayon")]
+pub trait MaybeSync: Sync {}
+#[cfg(feature = "rayon")]
+impl<T: Sync> MaybeSync for T {}
+
+#[cfg(not(feature = "rayon"))]
+pub trait MaybeSync {}
+#[cfg(not(feature = "rayon"))]
+impl<T> MaybeSync for T {}
+
 pub mod complex;
 pub mod real;
 
@@ -50,7 +76,7 @@ pub fn get<T: FftNum, InElem: GetProcessor<T, InElem>>() -> impl Processor<T, In
 ///
 /// This trait defines the interface for performing FFT operations on N-dimensional arrays.
 /// Implementations exist for both real-valued and complex-valued inputs.
-pub trait Processor<T: FftNum, InElem: GetProcessor<T, InElem>> {
+pub trait Processor<T: FftNum, InElem: GetProcessor<T, InElem>>: MaybeSend {
     /// Performs a forward FFT transform.
     ///
     /// Converts the input array from the spatial/time domain to the frequency domain.
@@ -96,7 +122,7 @@ pub trait Processor<T: FftNum, InElem: GetProcessor<T, InElem>> {
 ///
 /// This trait is implemented for real and complex numeric types, allowing them to
 /// automatically select the appropriate FFT processor implementation.
-pub trait GetProcessor<T: FftNum, InElem>
+pub trait GetProcessor<T: FftNum, InElem> : MaybeSend
 where
     InElem: GetProcessor<T, InElem>,
 {

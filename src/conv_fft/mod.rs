@@ -17,7 +17,7 @@ mod padding;
 mod processor;
 
 // pub use fft::Processor;
-pub use processor::{get as get_processor, GetProcessor, Processor};
+pub use processor::{get as get_processor, GetProcessor, MaybeSync, Processor};
 
 // /// Represents a "baked" convolution operation.
 // ///
@@ -201,13 +201,14 @@ fn conv_fft_proc_impl<'a, T, InElem, S, SK, const N: usize>(
     conv_mode: ConvMode<N>,
     padding_mode: PaddingMode<N, InElem>,
     fft_processor: &mut impl Processor<T, InElem>,
+    #[cfg_attr(not(feature = "rayon"), allow(unused_variables))]
     parallel: bool,
 ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>
 where
     T: NumAssign + FftNum,
-    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy + 'a,
-    S: Data<Elem = InElem> + 'a,
-    SK: Data<Elem = InElem> + 'a,
+    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy + MaybeSync + 'a,
+    S: Data<Elem = InElem> + MaybeSync + 'a,
+    SK: Data<Elem = InElem> + MaybeSync + 'a,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
         SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
@@ -243,31 +244,54 @@ where
         pds_raw_dim[i].max(kernel_raw_dim_with_dilation[i])
     }));
 
-    let mut data_pd = padding::data(data, padding_mode, cm.padding, fft_size);
-    let mut kernel_pd = padding::kernel(kwd, fft_size);
-
-    // Forward FFT of data, then kernel.
-    // When parallel=true, each forward() call already parallelises its internal
-    // row-wise FFT via par_chunks_mut, so we get full multi-core utilisation.
-    let mut data_pd_fft = fft_processor.forward(&mut data_pd, parallel);
-    let kernel_pd_fft = fft_processor.forward(&mut kernel_pd, parallel);
-
-
-    
-    // Pointwise spectral multiply — parallelize when rayon is available.
+    // Parallel path: padding and forward FFT are folded into a single rayon::join,
+    // so data-padding+data-FFT runs concurrently with kernel-padding+kernel-FFT.
+    // The spectral multiply is parallelised too.
+    // Requires InElem/S/SK: MaybeSync so that shared references can cross thread
+    // boundaries inside rayon::join closures (no-op when rayon is disabled).
+    //
+    // Serial path: sequential padding then FFT as before.
     #[cfg(feature = "rayon")]
-    if parallel {
-        use rayon::prelude::*;
-        let dv = data_pd_fft.as_slice_mut().unwrap();
-        let kv = kernel_pd_fft.as_slice().unwrap();
-        dv.par_iter_mut().zip(kv.par_iter()).for_each(|(d, k)| *d *= *k);
+    let output = if parallel {
+        let (mut data_fft, kern_fft) = rayon::join(
+            || {
+                let mut pd = padding::data(data, padding_mode, cm.padding, fft_size);
+                fft_processor.forward(&mut pd, true)
+            },
+            || {
+                let mut pk = padding::kernel(kwd, fft_size);
+                let mut p = InElem::get_processor();
+                p.forward(&mut pk, true)
+            },
+        );
+        {
+            use rayon::prelude::*;
+            data_fft
+                .as_slice_mut()
+                .unwrap()
+                .par_iter_mut()
+                .zip(kern_fft.as_slice().unwrap().par_iter())
+                .for_each(|(d, k)| *d *= *k);
+        }
+        fft_processor.backward(&mut data_fft, true)
     } else {
-        data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
-    }
-    #[cfg(not(feature = "rayon"))]
-    data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
+        let mut data_pd = padding::data(data, padding_mode, cm.padding, fft_size);
+        let mut kernel_pd = padding::kernel(kwd, fft_size);
+        let mut data_fft = fft_processor.forward(&mut data_pd, false);
+        let kern_fft = fft_processor.forward(&mut kernel_pd, false);
+        data_fft.zip_mut_with(&kern_fft, |d, k| *d *= *k);
+        fft_processor.backward(&mut data_fft, false)
+    };
 
-    let output = fft_processor.backward(&mut data_pd_fft, parallel);
+    #[cfg(not(feature = "rayon"))]
+    let output = {
+        let mut data_pd = padding::data(data, padding_mode, cm.padding, fft_size);
+        let mut kernel_pd = padding::kernel(kwd, fft_size);
+        let mut data_fft = fft_processor.forward(&mut data_pd, false);
+        let kern_fft = fft_processor.forward(&mut kernel_pd, false);
+        data_fft.zip_mut_with(&kern_fft, |d, k| *d *= *k);
+        fft_processor.backward(&mut data_fft, false)
+    };
 
     let output = output.slice_move(unsafe {
         SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
@@ -285,9 +309,9 @@ impl<'a, T, InElem, S, SK, const N: usize> ConvFFTExt<'a, T, InElem, S, SK, N>
     for ArrayBase<S, Dim<[Ix; N]>>
 where
     T: NumAssign + FftNum,
-    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy + 'a,
-    S: Data<Elem = InElem> + 'a,
-    SK: Data<Elem = InElem> + 'a,
+    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy + MaybeSync + 'a,
+    S: Data<Elem = InElem> + MaybeSync + 'a,
+    SK: Data<Elem = InElem> + MaybeSync + 'a,
     [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
         SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
