@@ -480,6 +480,189 @@ mod tests {
         }
     }
 
+    // ===== Parallel vs Serial Consistency Tests =====
+
+    #[cfg(feature = "rayon")]
+    mod par_vs_serial {
+        use super::*;
+        use ndarray::Dimension;
+
+        fn max_diff_f64<const N: usize>(a: &Array<f64, Dim<[Ix; N]>>, b: &Array<f64, Dim<[Ix; N]>>) -> f64
+        where
+            Dim<[Ix; N]>: Dimension,
+        {
+            a.iter()
+                .zip(b.iter())
+                .map(|(x, y)| (x - y).abs())
+                .fold(0.0_f64, f64::max)
+        }
+
+        fn max_diff_f32<const N: usize>(a: &Array<f32, Dim<[Ix; N]>>, b: &Array<f32, Dim<[Ix; N]>>) -> f32
+        where
+            Dim<[Ix; N]>: Dimension,
+        {
+            a.iter()
+                .zip(b.iter())
+                .map(|(x, y)| (x - y).abs())
+                .fold(0.0_f32, f32::max)
+        }
+
+        fn max_diff_complex<const N: usize>(
+            a: &Array<Complex<f32>, Dim<[Ix; N]>>,
+            b: &Array<Complex<f32>, Dim<[Ix; N]>>,
+        ) -> f32
+        where
+            Dim<[Ix; N]>: Dimension,
+        {
+            a.iter()
+                .zip(b.iter())
+                .map(|(x, y)| (x - y).norm())
+                .fold(0.0_f32, f32::max)
+        }
+
+        // ---- forward ----
+
+        #[test]
+        fn forward_1d_f64() {
+            let mut input_s = array![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+            let mut input_p = input_s.clone();
+            let mut ps = Processor::default();
+            let mut pp = Processor::default();
+            let serial = ps.forward(&mut input_s, false);
+            let par    = pp.forward(&mut input_p, true);
+            assert_eq!(serial.shape(), par.shape());
+            let diff = max_diff_complex(&serial.map(|c| Complex::new(c.re as f32, c.im as f32)),
+                                        &par.map(|c| Complex::new(c.re as f32, c.im as f32)));
+            // use the raw f64 max diff instead
+            let diff64 = serial.iter().zip(par.iter())
+                .map(|(s, p)| ((s.re - p.re).abs()).max((s.im - p.im).abs()))
+                .fold(0.0_f64, f64::max);
+            assert!(
+                diff64 < 1e-10,
+                "real forward 1D: par differs from serial by {:.3e}",
+                diff64
+            );
+        }
+
+        #[test]
+        fn forward_2d_f32() {
+            let mut input_s = Array::from_shape_fn((16, 16), |(i, j)| (i * 16 + j) as f32);
+            let mut input_p = input_s.clone();
+            let mut ps = Processor::default();
+            let mut pp = Processor::default();
+            let serial = ps.forward(&mut input_s, false);
+            let par    = pp.forward(&mut input_p, true);
+            assert_eq!(serial.shape(), par.shape());
+            let diff = max_diff_complex(&serial, &par);
+            assert!(
+                diff < 1e-4,
+                "real forward 2D f32: par differs from serial by {:.3e}",
+                diff
+            );
+        }
+
+        #[test]
+        fn forward_3d_f64() {
+            let mut input_s = Array::from_shape_fn((4, 8, 8), |(i, j, k)| (i * 64 + j * 8 + k) as f64);
+            let mut input_p = input_s.clone();
+            let mut ps = Processor::<f64>::default();
+            let mut pp = Processor::<f64>::default();
+            let serial = ps.forward(&mut input_s, false);
+            let par    = pp.forward(&mut input_p, true);
+            assert_eq!(serial.shape(), par.shape());
+            let diff = serial.iter().zip(par.iter())
+                .map(|(s, p)| ((s.re - p.re).abs()).max((s.im - p.im).abs()))
+                .fold(0.0_f64, f64::max);
+            assert!(
+                diff < 1e-9,
+                "real forward 3D f64: par differs from serial by {:.3e}",
+                diff
+            );
+        }
+
+        // ---- backward ----
+
+        #[test]
+        fn backward_2d_f32() {
+            // Build a freq-domain array via the serial forward, then compare
+            // serial backward vs parallel backward.
+            let mut input = Array::from_shape_fn((16, 16), |(i, j)| (i * 16 + j) as f32);
+            let mut ps = Processor::default();
+            let mut freq_s = ps.forward(&mut input, false);
+            let mut freq_p = freq_s.clone();
+
+            let mut ps2 = Processor::default();
+            ps2.rp_origin_len = ps.rp_origin_len;
+            let mut pp2 = Processor::default();
+            pp2.rp_origin_len = ps.rp_origin_len;
+
+            let serial = ps2.backward(&mut freq_s, false);
+            let par    = pp2.backward(&mut freq_p, true);
+            assert_eq!(serial.shape(), par.shape());
+            let diff = max_diff_f32(&serial, &par);
+            assert!(
+                diff < 1e-4,
+                "real backward 2D f32: par differs from serial by {:.3e}",
+                diff
+            );
+        }
+
+        #[test]
+        fn backward_3d_f64() {
+            let mut input = Array::from_shape_fn((4, 8, 8), |(i, j, k)| (i * 64 + j * 8 + k) as f64);
+            let mut ps = Processor::<f64>::default();
+            let mut freq_s = ps.forward(&mut input, false);
+            let mut freq_p = freq_s.clone();
+
+            let mut ps2 = Processor::<f64>::default();
+            ps2.rp_origin_len = ps.rp_origin_len;
+            let mut pp2 = Processor::<f64>::default();
+            pp2.rp_origin_len = ps.rp_origin_len;
+
+            let serial = ps2.backward(&mut freq_s, false);
+            let par    = pp2.backward(&mut freq_p, true);
+            assert_eq!(serial.shape(), par.shape());
+            let diff = max_diff_f64(&serial, &par);
+            assert!(
+                diff < 1e-9,
+                "real backward 3D f64: par differs from serial by {:.3e}",
+                diff
+            );
+        }
+
+        // ---- full roundtrip via parallel ----
+
+        #[test]
+        fn roundtrip_2d_parallel_f32() {
+            let original = Array::from_shape_fn((32, 32), |(i, j)| ((i + j) % 17) as f32);
+            let mut input = original.clone();
+            let mut p = Processor::default();
+            let mut freq = p.forward(&mut input, true);
+            let recon = p.backward(&mut freq, true);
+            let diff = max_diff_f32(&original, &recon);
+            assert!(
+                diff < 1e-4,
+                "real 2D parallel roundtrip failed with max_diff {:.3e}",
+                diff
+            );
+        }
+
+        #[test]
+        fn roundtrip_3d_parallel_f64() {
+            let original = Array::from_shape_fn((8, 8, 8), |(i, j, k)| ((i + j + k) % 13) as f64);
+            let mut input = original.clone();
+            let mut p = Processor::<f64>::default();
+            let mut freq = p.forward(&mut input, true);
+            let recon = p.backward(&mut freq, true);
+            let diff = max_diff_f64(&original, &recon);
+            assert!(
+                diff < 1e-9,
+                "real 3D parallel roundtrip failed with max_diff {:.3e}",
+                diff
+            );
+        }
+    }
+
     // ===== Low-Level FFT API Tests =====
 
     mod fft_api {

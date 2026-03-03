@@ -265,6 +265,148 @@ mod tests {
         }
     }
 
+    // ===== Parallel vs Serial Consistency Tests =====
+
+    #[cfg(feature = "rayon")]
+    mod par_vs_serial {
+        use super::*;
+        use ndarray::Dimension;
+
+        fn max_diff<const N: usize>(
+            a: &Array<Complex<f32>, Dim<[Ix; N]>>,
+            b: &Array<Complex<f32>, Dim<[Ix; N]>>,
+        ) -> f32
+        where
+            Dim<[Ix; N]>: Dimension,
+        {
+            a.iter()
+                .zip(b.iter())
+                .map(|(x, y)| (x - y).norm())
+                .fold(0.0_f32, f32::max)
+        }
+
+        #[test]
+        fn forward_1d() {
+            let mut input_s = array![
+                Complex::new(1.0f32, 0.5),
+                Complex::new(2.0, -0.3),
+                Complex::new(3.0, 0.8),
+                Complex::new(4.0, -0.2),
+                Complex::new(5.0, 0.6),
+                Complex::new(6.0, -0.4),
+                Complex::new(7.0, 1.0),
+                Complex::new(8.0, -0.7),
+            ];
+            let mut input_p = input_s.clone();
+            let mut ps = Processor::<f32>::default();
+            let mut pp = Processor::<f32>::default();
+            let serial = ps.forward(&mut input_s, false);
+            let par    = pp.forward(&mut input_p, true);
+            assert_eq!(serial.shape(), par.shape());
+            let diff = max_diff(&serial, &par);
+            assert!(
+                diff < 1e-5,
+                "complex forward 1D: par differs from serial by {:.3e}",
+                diff
+            );
+        }
+
+        #[test]
+        fn forward_2d() {
+            let mut input_s = Array::from_shape_fn((16, 16), |(i, j)| {
+                Complex::new(((i * 16 + j) % 11) as f32, -(((i + j) % 7) as f32))
+            });
+            let mut input_p = input_s.clone();
+            let mut ps = Processor::<f32>::default();
+            let mut pp = Processor::<f32>::default();
+            let serial = ps.forward(&mut input_s, false);
+            let par    = pp.forward(&mut input_p, true);
+            assert_eq!(serial.shape(), par.shape());
+            let diff = max_diff(&serial, &par);
+            assert!(
+                diff < 1e-3,
+                "complex forward 2D: par differs from serial by {:.3e}",
+                diff
+            );
+        }
+
+        #[test]
+        fn forward_3d() {
+            let mut input_s = Array::from_shape_fn((4, 8, 8), |(i, j, k)| {
+                Complex::new(((i + j + k) % 13) as f32, -(((i * j + k) % 5) as f32))
+            });
+            let mut input_p = input_s.clone();
+            let mut ps = Processor::<f32>::default();
+            let mut pp = Processor::<f32>::default();
+            let serial = ps.forward(&mut input_s, false);
+            let par    = pp.forward(&mut input_p, true);
+            assert_eq!(serial.shape(), par.shape());
+            let diff = max_diff(&serial, &par);
+            assert!(
+                diff < 1e-3,
+                "complex forward 3D: par differs from serial by {:.3e}",
+                diff
+            );
+        }
+
+        #[test]
+        fn backward_2d() {
+            // Build freq via serial forward, then compare serial vs parallel backward.
+            let mut input = Array::from_shape_fn((16, 16), |(i, j)| {
+                Complex::new(((i * 16 + j) % 11) as f32, -(((i + j) % 7) as f32))
+            });
+            let mut ps = Processor::<f32>::default();
+            let mut freq_s = ps.forward(&mut input, false);
+            let mut freq_p = freq_s.clone();
+
+            let mut ps2 = Processor::<f32>::default();
+            let mut pp2 = Processor::<f32>::default();
+            let serial = ps2.backward(&mut freq_s, false);
+            let par    = pp2.backward(&mut freq_p, true);
+            assert_eq!(serial.shape(), par.shape());
+            let diff = max_diff(&serial, &par);
+            assert!(
+                diff < 1e-3,
+                "complex backward 2D: par differs from serial by {:.3e}",
+                diff
+            );
+        }
+
+        #[test]
+        fn roundtrip_2d_parallel() {
+            let original = Array::from_shape_fn((32, 32), |(i, j)| {
+                Complex::new(((i + j) % 17) as f32, -(((i * j) % 11) as f32))
+            });
+            let mut input = original.clone();
+            let mut p = Processor::<f32>::default();
+            let mut freq = p.forward(&mut input, true);
+            let recon = p.backward(&mut freq, true);
+            let diff = max_diff(&original, &recon);
+            assert!(
+                diff < 1e-3,
+                "complex 2D parallel roundtrip failed with max_diff {:.3e}",
+                diff
+            );
+        }
+
+        #[test]
+        fn roundtrip_3d_parallel() {
+            let original = Array::from_shape_fn((8, 8, 8), |(i, j, k)| {
+                Complex::new(((i + j + k) % 13) as f32, -(((i * j + k) % 7) as f32))
+            });
+            let mut input = original.clone();
+            let mut p = Processor::<f32>::default();
+            let mut freq = p.forward(&mut input, true);
+            let recon = p.backward(&mut freq, true);
+            let diff = max_diff(&original, &recon);
+            assert!(
+                diff < 1e-3,
+                "complex 3D parallel roundtrip failed with max_diff {:.3e}",
+                diff
+            );
+        }
+    }
+
     // ===== Complex Value Tests =====
 
     mod complex_values {
