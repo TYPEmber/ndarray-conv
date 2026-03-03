@@ -21,36 +21,95 @@ impl<T: ConvFftNum> Default for Processor<T> {
 }
 
 impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
-    /// Performs a forward FFT on the given input array.
-    ///
-    /// This computes a real-to-complex FFT on the last axis (contiguous),
-    /// producing a complex-valued array where the last axis length is
-    /// `rp.complex_len()`. Remaining axes are transformed with complex
-    /// FFTs. All scratch buffers are allocated locally and reused where
-    /// possible to avoid extra allocations.
     fn forward<S: DataMut<Elem = T>, const N: usize>(
         &mut self,
         input: &mut ArrayBase<S, Dim<[Ix; N]>>,
+        parallel: bool,
     ) -> Array<Complex<T>, Dim<[Ix; N]>>
     where
         Dim<[Ix; N]>: RemoveAxis,
         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     {
-        // Do real->complex on the last (contiguous) axis into an
-        // uninitialized `output` buffer, then permute and run complex-to-
-        // complex FFTs on the remaining axes while swapping two buffers
-        // to avoid repeated allocations and copies.
+        #[cfg(not(feature = "rayon"))]
+        let _ = parallel;
+        #[cfg(feature = "rayon")]
+        if parallel {
+            use rayon::prelude::*;
+
+            let raw_dim: [usize; N] = std::array::from_fn(|i| input.raw_dim()[i]);
+            let rp = self.rp.plan_fft_forward(raw_dim[N - 1]);
+            self.rp_origin_len = rp.len();
+
+            let mut output_shape = raw_dim;
+            output_shape[N - 1] = rp.complex_len();
+
+            let mut output = Array::<Complex<T>, _>::zeros(output_shape);
+            let mut buffer = Array::<Complex<T>, _>::zeros(output_shape);
+
+            // Real-to-complex FFT along the last axis (all rows in parallel).
+            // After from_shape_vec / zeros, the arrays are contiguous.
+            {
+                let in_row_len = raw_dim[N - 1];
+                let out_row_len = rp.complex_len();
+                let scratch_len = rp.get_scratch_len();
+                let in_slice = input.as_slice_mut().unwrap();
+                let out_slice = output.as_slice_mut().unwrap();
+                in_slice
+                    .par_chunks_mut(in_row_len)
+                    .zip(out_slice.par_chunks_mut(out_row_len))
+                    .for_each(|(in_row, out_row)| {
+                        let mut scratch =
+                            vec![Complex::new(T::zero(), T::zero()); scratch_len];
+                        rp.process_with_scratch(in_row, out_row, &mut scratch).unwrap();
+                    });
+            }
+
+            let mut axes: [usize; N] = std::array::from_fn(|i| i);
+            axes.rotate_right(1);
+
+            for _ in 0..N - 1 {
+                output = output.permuted_axes(axes);
+
+                buffer =
+                    Array::from_shape_vec(output.raw_dim(), buffer.into_raw_vec_and_offset().0)
+                        .unwrap();
+                buffer.zip_mut_with(&output, |transpose, &origin| {
+                    *transpose = origin;
+                });
+
+                output =
+                    Array::from_shape_vec(output.raw_dim(), output.into_raw_vec_and_offset().0)
+                        .unwrap();
+
+                let fft = self
+                    .cp
+                    .plan_fft(output.shape()[N - 1], rustfft::FftDirection::Forward);
+
+                let row_len = output.shape()[N - 1];
+                let scratch_len = fft.get_outofplace_scratch_len();
+                // After from_shape_vec both arrays are contiguous.
+                let buf_slice = buffer.as_slice_mut().unwrap();
+                let out_slice = output.as_slice_mut().unwrap();
+                buf_slice
+                    .par_chunks_mut(row_len)
+                    .zip(out_slice.par_chunks_mut(row_len))
+                    .for_each(|(buf_row, out_row)| {
+                        let mut scratch =
+                            vec![Complex::new(T::zero(), T::zero()); scratch_len];
+                        fft.process_outofplace_with_scratch(buf_row, out_row, &mut scratch);
+                    });
+            }
+
+            return output;
+        }
+
+        // Serial path
         let raw_dim: [usize; N] = std::array::from_fn(|i| input.raw_dim()[i]);
         let rp = self.rp.plan_fft_forward(raw_dim[N - 1]);
         self.rp_origin_len = rp.len();
 
         let mut output_shape = raw_dim;
         output_shape[N - 1] = rp.complex_len();
-
-        // let output = Array::uninit(output_shape);
-        // let buffer = Array::uninit(output_shape);
-        // let mut output = unsafe { output.assume_init() };
-        // let mut buffer = unsafe { buffer.assume_init() };
 
         let mut output = Array::zeros(output_shape);
         let mut buffer = Array::zeros(output_shape);
@@ -65,23 +124,18 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
             .unwrap();
         }
 
-        // axes permutation helper: rotate right so we make the next axis the
-        // last (contiguous) axis on each iteration.
         let mut axes: [usize; N] = std::array::from_fn(|i| i);
         axes.rotate_right(1);
 
-        // perform FFT on last axis, then permute and repeat for remaining axes
         for _ in 0..N - 1 {
             output = output.permuted_axes(axes);
 
-            // reshape
             buffer = Array::from_shape_vec(output.raw_dim(), buffer.into_raw_vec_and_offset().0)
                 .unwrap();
             buffer.zip_mut_with(&output, |transpose, &origin| {
                 *transpose = origin;
             });
 
-            // contiguous
             output = Array::from_shape_vec(output.raw_dim(), output.into_raw_vec_and_offset().0)
                 .unwrap();
 
@@ -101,37 +155,93 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
         output
     }
 
-    /// Performs an inverse FFT on the given input array.
-    ///
-    /// This performs inverse complex-to-complex FFTs on the axes other
-    /// than the last, then finishes with a complex-to-real inverse on the
-    /// last axis (turning complex frequency data back into real samples).
-    /// Like `forward`, scratch buffers are local and reused when possible.
     fn backward<const N: usize>(
         &mut self,
         input: &mut Array<Complex<T>, Dim<[Ix; N]>>,
+        parallel: bool,
     ) -> Array<T, Dim<[Ix; N]>>
     where
         Dim<[Ix; N]>: RemoveAxis,
         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     {
-        // Reverse the forward flow: perform inverse complex FFTs on the last
-        // axis (for each remaining axis), permuting and copying into a
-        // temporary buffer to maintain contiguous layout, then finally run
-        // the complex->real inverse on the last axis.
+        #[cfg(not(feature = "rayon"))]
+        let _ = parallel;
+        #[cfg(feature = "rayon")]
+        if parallel {
+            use rayon::prelude::*;
+
+            let raw_dim: [usize; N] = std::array::from_fn(|i| input.raw_dim()[i]);
+
+            let buffer = Array::uninit(raw_dim);
+            let mut buffer = unsafe { buffer.assume_init() };
+
+            let mut axes: [usize; N] = std::array::from_fn(|i| i);
+            axes.rotate_left(1);
+
+            let mut input = input.view_mut();
+
+            for _ in 0..N - 1 {
+                let fft = self.cp.plan_fft_inverse(buffer.shape()[N - 1]);
+
+                buffer =
+                    Array::from_shape_vec(buffer.raw_dim(), buffer.into_raw_vec_and_offset().0)
+                        .unwrap();
+
+                let row_len = buffer.shape()[N - 1];
+                let scratch_len = fft.get_outofplace_scratch_len();
+                let in_slice = input.as_slice_mut().unwrap();
+                let buf_slice = buffer.as_slice_mut().unwrap();
+                in_slice
+                    .par_chunks_mut(row_len)
+                    .zip(buf_slice.par_chunks_mut(row_len))
+                    .for_each(|(in_row, buf_row)| {
+                        let mut scratch =
+                            vec![Complex::new(T::zero(), T::zero()); scratch_len];
+                        fft.process_outofplace_with_scratch(in_row, buf_row, &mut scratch);
+                    });
+
+                buffer = buffer.permuted_axes(axes);
+                input =
+                    unsafe { ArrayViewMut::from_shape_ptr(buffer.raw_dim(), input.as_mut_ptr()) };
+                input.zip_mut_with(&buffer, |dst, &src| *dst = src);
+            }
+
+            let rp = self.rp.plan_fft_inverse(self.rp_origin_len);
+
+            let mut output_shape = input.raw_dim();
+            output_shape[N - 1] = self.rp_origin_len;
+            let mut output = Array::zeros(output_shape);
+
+            {
+                let in_row_len = input.shape()[N - 1];
+                let out_row_len = self.rp_origin_len;
+                let scratch_len = rp.get_scratch_len();
+                let in_slice = input.as_slice_mut().unwrap();
+                let out_slice = output.as_slice_mut().unwrap();
+                in_slice
+                    .par_chunks_mut(in_row_len)
+                    .zip(out_slice.par_chunks_mut(out_row_len))
+                    .for_each(|(in_row, out_row)| {
+                        let mut scratch =
+                            vec![Complex::new(T::zero(), T::zero()); scratch_len];
+                        let _ = rp.process_with_scratch(in_row, out_row, &mut scratch);
+                    });
+            }
+
+            let len = T::from_usize(output.len()).unwrap();
+            output.map_mut(|x| *x = x.div(len));
+            return output;
+        }
+
+        // Serial path
         let raw_dim: [usize; N] = std::array::from_fn(|i| input.raw_dim()[i]);
 
-        // one temporary buffer used per iteration; allocated to raw_dim and
-        // re-shaped as necessary to reuse its allocation.
         let buffer = Array::uninit(raw_dim);
         let mut buffer = unsafe { buffer.assume_init() };
 
-        // axes permutation helper: rotate left to undo the right rotations
-        // performed by forward.
         let mut axes: [usize; N] = std::array::from_fn(|i| i);
         axes.rotate_left(1);
 
-        // work on a mutable view of the input so we can copy into it
         let mut input = input.view_mut();
 
         for _ in 0..N - 1 {
@@ -139,26 +249,20 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
             let mut scratch =
                 vec![Complex::new(T::zero(), T::zero()); fft.get_outofplace_scratch_len()];
 
-            // contiguous
             buffer = Array::from_shape_vec(buffer.raw_dim(), buffer.into_raw_vec_and_offset().0)
                 .unwrap();
 
-            // out-of-place inverse FFT from `input` into `buffer`
             fft.process_outofplace_with_scratch(
                 input.as_slice_mut().unwrap(),
                 buffer.as_slice_mut().unwrap(),
                 &mut scratch,
             );
 
-            // permute `buffer` so the next axis becomes the last, then copy
-            // its contents back into `input` (which is arranged to be
-            // contiguous for the next iteration).
             buffer = buffer.permuted_axes(axes);
             input = unsafe { ArrayViewMut::from_shape_ptr(buffer.raw_dim(), input.as_mut_ptr()) };
             input.zip_mut_with(&buffer, |dst, &src| *dst = src);
         }
 
-        // now inverse real FFT on the last axis
         let rp = self.rp.plan_fft_inverse(self.rp_origin_len);
 
         let mut output_shape = input.raw_dim();
@@ -167,8 +271,6 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
 
         let mut scratch = vec![Complex::new(T::zero(), T::zero()); rp.get_scratch_len()];
         for (mut input_row, mut output_row) in input.rows_mut().into_iter().zip(output.rows_mut()) {
-            // no need to check result
-            // large input sizes may cause slight numerical issues
             let _ = rp.process_with_scratch(
                 input_row.as_slice_mut().unwrap(),
                 output_row.as_slice_mut().unwrap(),
@@ -197,14 +299,10 @@ mod tests {
             let original = array![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0];
             let mut input = original.clone();
 
-            let mut p = Processor {
-                rp: realfft::RealFftPlanner::new(),
-                rp_origin_len: 0,
-                cp: rustfft::FftPlanner::new(),
-            };
+            let mut p = Processor::default();
 
-            let mut freq = p.forward(&mut input);
-            let reconstructed = p.backward(&mut freq);
+            let mut freq = p.forward(&mut input, false);
+            let reconstructed = p.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(reconstructed.iter()) {
                 assert!(
@@ -227,14 +325,10 @@ mod tests {
 
             for (i, original) in test_cases.into_iter().enumerate() {
                 let mut input = original.clone();
-                let mut p = Processor {
-                    rp: realfft::RealFftPlanner::new(),
-                    rp_origin_len: 0,
-                    cp: rustfft::FftPlanner::new(),
-                };
+                let mut p = Processor::default();
 
-                let mut freq = p.forward(&mut input);
-                let reconstructed = p.backward(&mut freq);
+                let mut freq = p.forward(&mut input, false);
+                let reconstructed = p.backward(&mut freq, false);
 
                 for (orig, recon) in original.iter().zip(reconstructed.iter()) {
                     assert!(
@@ -259,14 +353,10 @@ mod tests {
             let original = array![[1.0f64, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]];
             let mut input = original.clone();
 
-            let mut p = Processor {
-                rp: realfft::RealFftPlanner::new(),
-                rp_origin_len: 0,
-                cp: rustfft::FftPlanner::new(),
-            };
+            let mut p = Processor::default();
 
-            let mut freq = p.forward(&mut input);
-            let reconstructed = p.backward(&mut freq);
+            let mut freq = p.forward(&mut input, false);
+            let reconstructed = p.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(reconstructed.iter()) {
                 assert!(
@@ -283,14 +373,10 @@ mod tests {
             // Test 2x2
             let original = array![[1.0f64, 2.0], [3.0, 4.0]];
             let mut input = original.clone();
-            let mut p = Processor {
-                rp: realfft::RealFftPlanner::new(),
-                rp_origin_len: 0,
-                cp: rustfft::FftPlanner::new(),
-            };
+            let mut p = Processor::default();
 
-            let mut freq = p.forward(&mut input);
-            let reconstructed = p.backward(&mut freq);
+            let mut freq = p.forward(&mut input, false);
+            let reconstructed = p.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(reconstructed.iter()) {
                 assert!(
@@ -304,14 +390,10 @@ mod tests {
             // Test 3x3
             let original = array![[1.0f64, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]];
             let mut input = original.clone();
-            let mut p = Processor {
-                rp: realfft::RealFftPlanner::new(),
-                rp_origin_len: 0,
-                cp: rustfft::FftPlanner::new(),
-            };
+            let mut p = Processor::default();
 
-            let mut freq = p.forward(&mut input);
-            let reconstructed = p.backward(&mut freq);
+            let mut freq = p.forward(&mut input, false);
+            let reconstructed = p.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(reconstructed.iter()) {
                 assert!(
@@ -332,14 +414,10 @@ mod tests {
             let original = Array::random((200, 5000), Uniform::new(0f32, 1f32).unwrap());
             let mut input = original.clone();
 
-            let mut p = Processor {
-                rp: realfft::RealFftPlanner::new(),
-                rp_origin_len: 0,
-                cp: rustfft::FftPlanner::new(),
-            };
+            let mut p = Processor::default();
 
-            let mut freq = p.forward(&mut input);
-            let reconstructed = p.backward(&mut freq);
+            let mut freq = p.forward(&mut input, false);
+            let reconstructed = p.backward(&mut freq, false);
 
             // Check a sample of values
             let sample_indices = vec![(0, 0), (0, 100), (100, 0), (100, 2500), (199, 4999)];
@@ -385,14 +463,10 @@ mod tests {
             ];
             let mut input = original.clone();
 
-            let mut p = Processor {
-                rp: realfft::RealFftPlanner::new(),
-                rp_origin_len: 0,
-                cp: rustfft::FftPlanner::new(),
-            };
+            let mut p = Processor::default();
 
-            let mut a_fft = p.forward(&mut input);
-            let reconstructed = p.backward(&mut a_fft);
+            let mut a_fft = p.forward(&mut input, false);
+            let reconstructed = p.backward(&mut a_fft, false);
 
             for (orig, recon) in original.iter().zip(reconstructed.iter()) {
                 assert!(

@@ -156,6 +156,35 @@ where
         fft_processor: &mut impl Processor<T, InElem>,
     ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>;
 
+    /// Performs a parallel FFT-accelerated convolution operation using rayon.
+    ///
+    /// This method uses rayon to parallelize the FFT row operations, which can
+    /// significantly speed up convolution on large arrays.
+    ///
+    /// Only available when the `rayon` feature is enabled.
+    #[cfg(feature = "rayon")]
+    fn conv_fft_par(
+        &self,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
+        conv_mode: ConvMode<N>,
+        padding_mode: PaddingMode<N, InElem>,
+    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>;
+
+    /// Performs a parallel FFT-accelerated convolution using a provided processor.
+    ///
+    /// This method combines the processor reuse benefit of `conv_fft_with_processor`
+    /// with the parallel execution of `conv_fft_par`.
+    ///
+    /// Only available when the `rayon` feature is enabled.
+    #[cfg(feature = "rayon")]
+    fn conv_fft_par_with_processor(
+        &self,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
+        conv_mode: ConvMode<N>,
+        padding_mode: PaddingMode<N, InElem>,
+        fft_processor: &mut impl Processor<T, InElem>,
+    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>;
+
     // fn conv_fft_bake(
     //     &self,
     //     kernel: impl IntoKernelWithDilation<'a, SK, N>,
@@ -164,6 +193,92 @@ where
     // ) -> Result<Baked<T, SK, N>, crate::Error<N>>;
 
     // fn conv_fft_with_baked(&self, baked: &mut Baked<T, SK, N>) -> Array<T, Dim<[Ix; N]>>;
+}
+
+fn conv_fft_proc_impl<'a, T, InElem, S, SK, const N: usize>(
+    data: &ArrayBase<S, Dim<[Ix; N]>>,
+    kernel: impl IntoKernelWithDilation<'a, SK, N>,
+    conv_mode: ConvMode<N>,
+    padding_mode: PaddingMode<N, InElem>,
+    fft_processor: &mut impl Processor<T, InElem>,
+    parallel: bool,
+) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>
+where
+    T: NumAssign + FftNum,
+    InElem: processor::GetProcessor<T, InElem> + NumAssign + Copy + 'a,
+    S: Data<Elem = InElem> + 'a,
+    SK: Data<Elem = InElem> + 'a,
+    [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
+    SliceInfo<[SliceInfoElem; N], Dim<[Ix; N]>, Dim<[Ix; N]>>:
+        SliceArg<Dim<[Ix; N]>, OutDim = Dim<[Ix; N]>>,
+    Dim<[Ix; N]>: RemoveAxis,
+{
+    let kwd = kernel.into_kernel_with_dilation();
+
+    let data_raw_dim = data.raw_dim();
+    if data.shape().iter().product::<usize>() == 0 {
+        return Err(crate::Error::DataShape(data_raw_dim));
+    }
+
+    let kernel_raw_dim = kwd.kernel.raw_dim();
+    if kwd.kernel.shape().iter().product::<usize>() == 0 {
+        return Err(crate::Error::DataShape(kernel_raw_dim));
+    }
+
+    let kernel_raw_dim_with_dilation: [usize; N] =
+        std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
+
+    let cm = conv_mode.unfold(&kwd);
+
+    let pds_raw_dim: [usize; N] =
+        std::array::from_fn(|i| data_raw_dim[i] + cm.padding[i][0] + cm.padding[i][1]);
+    if !(0..N).all(|i| kernel_raw_dim_with_dilation[i] <= pds_raw_dim[i]) {
+        return Err(crate::Error::MismatchShape(
+            conv_mode,
+            kernel_raw_dim_with_dilation,
+        ));
+    }
+
+    let fft_size = good_size::compute::<N>(&std::array::from_fn(|i| {
+        pds_raw_dim[i].max(kernel_raw_dim_with_dilation[i])
+    }));
+
+    let mut data_pd = padding::data(data, padding_mode, cm.padding, fft_size);
+    let mut kernel_pd = padding::kernel(kwd, fft_size);
+
+    // Forward FFT of data, then kernel.
+    // When parallel=true, each forward() call already parallelises its internal
+    // row-wise FFT via par_chunks_mut, so we get full multi-core utilisation.
+    let mut data_pd_fft = fft_processor.forward(&mut data_pd, parallel);
+    let kernel_pd_fft = fft_processor.forward(&mut kernel_pd, parallel);
+
+
+    
+    // Pointwise spectral multiply — parallelize when rayon is available.
+    #[cfg(feature = "rayon")]
+    if parallel {
+        use rayon::prelude::*;
+        let dv = data_pd_fft.as_slice_mut().unwrap();
+        let kv = kernel_pd_fft.as_slice().unwrap();
+        dv.par_iter_mut().zip(kv.par_iter()).for_each(|(d, k)| *d *= *k);
+    } else {
+        data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
+    }
+    #[cfg(not(feature = "rayon"))]
+    data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
+
+    let output = fft_processor.backward(&mut data_pd_fft, parallel);
+
+    let output = output.slice_move(unsafe {
+        SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
+            start: kernel_raw_dim_with_dilation[i] as isize - 1,
+            end: Some((pds_raw_dim[i]) as isize),
+            step: cm.strides[i] as isize,
+        }))
+        .unwrap()
+    });
+
+    Ok(output)
 }
 
 impl<'a, T, InElem, S, SK, const N: usize> ConvFFTExt<'a, T, InElem, S, SK, N>
@@ -273,7 +388,7 @@ where
         padding_mode: PaddingMode<N, InElem>,
     ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>> {
         let mut p = InElem::get_processor();
-        self.conv_fft_with_processor(kernel, conv_mode, padding_mode, &mut p)
+        conv_fft_proc_impl(self, kernel, conv_mode, padding_mode, &mut p, false)
     }
 
     fn conv_fft_with_processor(
@@ -283,57 +398,29 @@ where
         padding_mode: PaddingMode<N, InElem>,
         fft_processor: &mut impl Processor<T, InElem>,
     ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>> {
-        let kwd = kernel.into_kernel_with_dilation();
+        conv_fft_proc_impl(self, kernel, conv_mode, padding_mode, fft_processor, false)
+    }
 
-        let data_raw_dim = self.raw_dim();
-        if self.shape().iter().product::<usize>() == 0 {
-            return Err(crate::Error::DataShape(data_raw_dim));
-        }
+    #[cfg(feature = "rayon")]
+    fn conv_fft_par(
+        &self,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
+        conv_mode: ConvMode<N>,
+        padding_mode: PaddingMode<N, InElem>,
+    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>> {
+        let mut p = InElem::get_processor();
+        conv_fft_proc_impl(self, kernel, conv_mode, padding_mode, &mut p, true)
+    }
 
-        let kernel_raw_dim = kwd.kernel.raw_dim();
-        if kwd.kernel.shape().iter().product::<usize>() == 0 {
-            return Err(crate::Error::DataShape(kernel_raw_dim));
-        }
-
-        let kernel_raw_dim_with_dilation: [usize; N] =
-            std::array::from_fn(|i| kernel_raw_dim[i] * kwd.dilation[i] - kwd.dilation[i] + 1);
-
-        let cm = conv_mode.unfold(&kwd);
-
-        let pds_raw_dim: [usize; N] =
-            std::array::from_fn(|i| data_raw_dim[i] + cm.padding[i][0] + cm.padding[i][1]);
-        if !(0..N).all(|i| kernel_raw_dim_with_dilation[i] <= pds_raw_dim[i]) {
-            return Err(crate::Error::MismatchShape(
-                conv_mode,
-                kernel_raw_dim_with_dilation,
-            ));
-        }
-
-        let fft_size = good_size::compute::<N>(&std::array::from_fn(|i| {
-            pds_raw_dim[i].max(kernel_raw_dim_with_dilation[i])
-        }));
-
-        let mut data_pd = padding::data(self, padding_mode, cm.padding, fft_size);
-        let mut kernel_pd = padding::kernel(kwd, fft_size);
-
-        let mut data_pd_fft = fft_processor.forward(&mut data_pd);
-        let kernel_pd_fft = fft_processor.forward(&mut kernel_pd);
-
-        data_pd_fft.zip_mut_with(&kernel_pd_fft, |d, k| *d *= *k);
-        // let mul_spec = data_pd_fft * kernel_pd_fft;
-
-        let output = fft_processor.backward(&mut data_pd_fft);
-
-        let output = output.slice_move(unsafe {
-            SliceInfo::new(std::array::from_fn(|i| SliceInfoElem::Slice {
-                start: kernel_raw_dim_with_dilation[i] as isize - 1,
-                end: Some((pds_raw_dim[i]) as isize),
-                step: cm.strides[i] as isize,
-            }))
-            .unwrap()
-        });
-
-        Ok(output)
+    #[cfg(feature = "rayon")]
+    fn conv_fft_par_with_processor(
+        &self,
+        kernel: impl IntoKernelWithDilation<'a, SK, N>,
+        conv_mode: ConvMode<N>,
+        padding_mode: PaddingMode<N, InElem>,
+        fft_processor: &mut impl Processor<T, InElem>,
+    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>> {
+        conv_fft_proc_impl(self, kernel, conv_mode, padding_mode, fft_processor, true)
     }
 }
 

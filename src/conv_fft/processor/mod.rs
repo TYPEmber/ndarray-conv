@@ -65,6 +65,7 @@ pub trait Processor<T: FftNum, InElem: GetProcessor<T, InElem>> {
     fn forward<S: DataMut<Elem = InElem>, const N: usize>(
         &mut self,
         input: &mut ArrayBase<S, Dim<[Ix; N]>>,
+        parallel: bool,
     ) -> Array<Complex<T>, Dim<[Ix; N]>>
     where
         Dim<[Ix; N]>: RemoveAxis,
@@ -84,6 +85,7 @@ pub trait Processor<T: FftNum, InElem: GetProcessor<T, InElem>> {
     fn backward<const N: usize>(
         &mut self,
         input: &mut Array<Complex<T>, Dim<[Ix; N]>>,
+        parallel: bool,
     ) -> Array<InElem, Dim<[Ix; N]>>
     where
         Dim<[Ix; N]>: RemoveAxis,
@@ -98,7 +100,7 @@ pub trait GetProcessor<T: FftNum, InElem>
 where
     InElem: GetProcessor<T, InElem>,
 {
-    /// Returns a processor instance appropriate for this type.
+    /// Returns a serial processor instance appropriate for this type.
     fn get_processor() -> impl Processor<T, InElem>;
 }
 

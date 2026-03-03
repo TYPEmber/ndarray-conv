@@ -9,6 +9,9 @@ repository = "https://github.com/TYPEmber/ndarray-conv.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+rayon = ["dep:rayon"]
+
 [dependencies]
 ndarray = {version = ">=0.17", features = ["rayon"]}
 num = "0.4"
@@ -16,6 +19,7 @@ rustfft = "6.4"
 realfft = "3.5"
 thiserror = "2.0"
 castaway = "0.2"
+rayon = {version = "1.11", optional = true}
 
 [dev-dependencies]
 tch = {version = "0.20.0", features = ["download-libtorch"]}
@@ -29,3 +33,8 @@ ndarray-rand = ">=0.16"
 [[bench]]
 name = "with_torch"
 harness = false
+
+[[bench]]
+name = "parallel"
+harness = false
+required-features = ["rayon"]

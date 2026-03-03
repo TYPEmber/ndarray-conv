@@ -27,30 +27,24 @@ impl<T: FftNum> Default for Processor<T> {
 impl<T: FftNum> Processor<T> {
     /// Perform an N-D complex FFT along all axes.
     ///
-    /// The function expects an array whose last axis is contiguous. It
-    /// performs an out-of-place FFT on that axis into an uninitialized
-    /// `output` buffer, then rotates axes and repeats so each axis becomes
-    /// the last once. `direction` controls forward vs inverse transform.
+    /// `direction` controls forward vs inverse transform.
+    /// `parallel` (only meaningful when the `rayon` feature is enabled)
+    /// controls whether row-wise FFT operations are dispatched via rayon.
     pub fn internal<S: DataMut<Elem = Complex<T>>, const N: usize>(
         &mut self,
         input: &mut ArrayBase<S, Dim<[Ix; N]>>,
         direction: rustfft::FftDirection,
+        parallel: bool,
     ) -> Array<Complex<T>, Dim<[Ix; N]>>
     where
         Dim<[Ix; N]>: RemoveAxis,
         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     {
-        // Ensure we always run FFTs along the last axis (which is contiguous),
-        // then permute the array so the next axis becomes the last. This
-        // avoids creating many small slices and keeps the heavy FFT work on
-        // contiguous memory.
         let output = Array::uninit(input.raw_dim());
         let mut output = unsafe { output.assume_init() };
 
         let mut buffer = input.view_mut();
 
-        // axes permutation helper: rotate so the next dimension becomes the
-        // last (contiguous) axis before each subsequent stage.
         let mut axes: [usize; N] = std::array::from_fn(|i| i);
 
         match direction {
@@ -58,30 +52,62 @@ impl<T: FftNum> Processor<T> {
             rustfft::FftDirection::Inverse => axes.rotate_left(1),
         };
 
-        // perform FFT on last axis, then permute and repeat for remaining axes
         for i in 0..N {
             let fft = self.cp.plan_fft(output.shape()[N - 1], direction);
-            let mut scratch =
-                vec![Complex::new(T::zero(), T::zero()); fft.get_outofplace_scratch_len()];
 
-            fft.process_outofplace_with_scratch(
-                buffer.as_slice_mut().unwrap(),
-                output.as_slice_mut().unwrap(),
-                &mut scratch,
-            );
+            #[cfg(feature = "rayon")]
+            if parallel {
+                use rayon::prelude::*;
+                let row_len = output.shape()[N - 1];
+                let scratch_len = fft.get_outofplace_scratch_len();
+                // Both arrays are contiguous after from_shape_vec / permuted_axes+reshape.
+                // Split the flat slices into rows and process each row in parallel,
+                // eliminating the mutex serialization of par_bridge().
+                let buf_slice = buffer.as_slice_mut().unwrap();
+                let out_slice = output.as_slice_mut().unwrap();
+                buf_slice
+                    .par_chunks_mut(row_len)
+                    .zip(out_slice.par_chunks_mut(row_len))
+                    .for_each(|(buf_row, out_row)| {
+                        let mut scratch = vec![
+                            Complex::new(T::zero(), T::zero());
+                            scratch_len
+                        ];
+                        fft.process_outofplace_with_scratch(buf_row, out_row, &mut scratch);
+                    });
+            } else {
+                let mut scratch =
+                    vec![Complex::new(T::zero(), T::zero()); fft.get_outofplace_scratch_len()];
+                fft.process_outofplace_with_scratch(
+                    buffer.as_slice_mut().unwrap(),
+                    output.as_slice_mut().unwrap(),
+                    &mut scratch,
+                );
+            }
 
-            // permute axes so the next axis becomes the last (contiguous)
+            // When rayon feature is disabled the `parallel` arg is unused;
+            // suppress the warning.
+            #[cfg(not(feature = "rayon"))]
+            {
+                let _ = parallel;
+                let mut scratch =
+                    vec![Complex::new(T::zero(), T::zero()); fft.get_outofplace_scratch_len()];
+                fft.process_outofplace_with_scratch(
+                    buffer.as_slice_mut().unwrap(),
+                    output.as_slice_mut().unwrap(),
+                    &mut scratch,
+                );
+            }
+
             if i != N - 1 {
                 output = output.permuted_axes(axes);
 
-                // reshape
                 buffer =
                     unsafe { ArrayViewMut::from_shape_ptr(output.raw_dim(), buffer.as_mut_ptr()) };
                 buffer.zip_mut_with(&output, |transpose, &origin| {
                     *transpose = origin;
                 });
 
-                // continuous
                 output =
                     Array::from_shape_vec(output.raw_dim(), output.into_raw_vec_and_offset().0)
                         .unwrap();
@@ -96,27 +122,28 @@ impl<T: FftNum> ProcessorTrait<T, Complex<T>> for Processor<T> {
     fn forward<S: DataMut<Elem = Complex<T>>, const N: usize>(
         &mut self,
         input: &mut ArrayBase<S, Dim<[Ix; N]>>,
+        parallel: bool,
     ) -> Array<Complex<T>, Dim<[Ix; N]>>
     where
         Dim<[Ix; N]>: RemoveAxis,
         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     {
-        self.internal(input, rustfft::FftDirection::Forward)
+        self.internal(input, rustfft::FftDirection::Forward, parallel)
     }
 
     fn backward<const N: usize>(
         &mut self,
         input: &mut Array<Complex<T>, Dim<[Ix; N]>>,
+        parallel: bool,
     ) -> Array<Complex<T>, Dim<[Ix; N]>>
     where
         Dim<[Ix; N]>: RemoveAxis,
         [Ix; N]: IntoDimension<Dim = Dim<[Ix; N]>>,
     {
-        let mut output = self.internal(input, rustfft::FftDirection::Inverse);
+        let mut output = self.internal(input, rustfft::FftDirection::Inverse, parallel);
         let len = Complex::new(T::from_usize(output.len()).unwrap(), T::zero());
         output.map_mut(|x| *x = *x / len);
         output
-        // self.backward_internal(input, None)
     }
 }
 
@@ -140,8 +167,8 @@ mod tests {
                 Complex::new(4.0, -0.75)
             ];
             let mut input = original.clone();
-            let mut freq = proc.forward(&mut input);
-            let recon = proc.backward(&mut freq);
+            let mut freq = proc.forward(&mut input, false);
+            let recon = proc.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(recon.iter()) {
                 assert!(
@@ -161,8 +188,8 @@ mod tests {
                 [Complex::new(3.0, 1.5), Complex::new(4.0, -0.5)]
             ];
             let mut input = original.clone();
-            let mut freq = proc.forward(&mut input);
-            let recon = proc.backward(&mut freq);
+            let mut freq = proc.forward(&mut input, false);
+            let recon = proc.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(recon.iter()) {
                 assert!(
@@ -188,8 +215,8 @@ mod tests {
                 ]
             ];
             let mut input = original.clone();
-            let mut freq = proc.forward(&mut input);
-            let recon = proc.backward(&mut freq);
+            let mut freq = proc.forward(&mut input, false);
+            let recon = proc.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(recon.iter()) {
                 assert!(
@@ -222,8 +249,8 @@ mod tests {
             for (i, original) in test_cases.into_iter().enumerate() {
                 let mut proc = Processor::<f32>::default();
                 let mut input = original.clone();
-                let mut freq = proc.forward(&mut input);
-                let recon = proc.backward(&mut freq);
+                let mut freq = proc.forward(&mut input, false);
+                let recon = proc.backward(&mut freq, false);
 
                 for (orig, recon) in original.iter().zip(recon.iter()) {
                     assert!(
@@ -253,8 +280,8 @@ mod tests {
                 Complex::new(-1.0, 2.0)
             ];
             let mut input = original.clone();
-            let mut freq = proc.forward(&mut input);
-            let recon = proc.backward(&mut freq);
+            let mut freq = proc.forward(&mut input, false);
+            let recon = proc.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(recon.iter()) {
                 assert!(
@@ -277,8 +304,8 @@ mod tests {
                 Complex::new(0.0, 3.0)
             ];
             let mut input = original.clone();
-            let mut freq = proc.forward(&mut input);
-            let recon = proc.backward(&mut freq);
+            let mut freq = proc.forward(&mut input, false);
+            let recon = proc.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(recon.iter()) {
                 assert!(
@@ -299,8 +326,8 @@ mod tests {
                 [Complex::new(1.0, -2.0), Complex::new(-1.0, -2.0)]
             ];
             let mut input = original.clone();
-            let mut freq = proc.forward(&mut input);
-            let recon = proc.backward(&mut freq);
+            let mut freq = proc.forward(&mut input, false);
+            let recon = proc.backward(&mut freq, false);
 
             for (orig, recon) in original.iter().zip(recon.iter()) {
                 assert!(
