@@ -201,8 +201,7 @@ fn conv_fft_proc_impl<'a, T, InElem, S, SK, const N: usize>(
     conv_mode: ConvMode<N>,
     padding_mode: PaddingMode<N, InElem>,
     fft_processor: &mut impl Processor<T, InElem>,
-    #[cfg_attr(not(feature = "rayon"), allow(unused_variables))]
-    parallel: bool,
+    #[cfg_attr(not(feature = "rayon"), allow(unused_variables))] parallel: bool,
 ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>
 where
     T: NumAssign + FftNum,

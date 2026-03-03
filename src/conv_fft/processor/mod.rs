@@ -122,7 +122,7 @@ pub trait Processor<T: FftNum, InElem: GetProcessor<T, InElem>>: MaybeSend {
 ///
 /// This trait is implemented for real and complex numeric types, allowing them to
 /// automatically select the appropriate FFT processor implementation.
-pub trait GetProcessor<T: FftNum, InElem> : MaybeSend
+pub trait GetProcessor<T: FftNum, InElem>: MaybeSend
 where
     InElem: GetProcessor<T, InElem>,
 {

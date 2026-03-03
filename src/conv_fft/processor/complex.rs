@@ -69,10 +69,7 @@ impl<T: FftNum> Processor<T> {
                     .par_chunks_mut(row_len)
                     .zip(out_slice.par_chunks_mut(row_len))
                     .for_each(|(buf_row, out_row)| {
-                        let mut scratch = vec![
-                            Complex::new(T::zero(), T::zero());
-                            scratch_len
-                        ];
+                        let mut scratch = vec![Complex::new(T::zero(), T::zero()); scratch_len];
                         fft.process_outofplace_with_scratch(buf_row, out_row, &mut scratch);
                     });
             } else {
@@ -301,7 +298,7 @@ mod tests {
             let mut ps = Processor::<f32>::default();
             let mut pp = Processor::<f32>::default();
             let serial = ps.forward(&mut input_s, false);
-            let par    = pp.forward(&mut input_p, true);
+            let par = pp.forward(&mut input_p, true);
             assert_eq!(serial.shape(), par.shape());
             let diff = max_diff(&serial, &par);
             assert!(
@@ -320,7 +317,7 @@ mod tests {
             let mut ps = Processor::<f32>::default();
             let mut pp = Processor::<f32>::default();
             let serial = ps.forward(&mut input_s, false);
-            let par    = pp.forward(&mut input_p, true);
+            let par = pp.forward(&mut input_p, true);
             assert_eq!(serial.shape(), par.shape());
             let diff = max_diff(&serial, &par);
             assert!(
@@ -339,7 +336,7 @@ mod tests {
             let mut ps = Processor::<f32>::default();
             let mut pp = Processor::<f32>::default();
             let serial = ps.forward(&mut input_s, false);
-            let par    = pp.forward(&mut input_p, true);
+            let par = pp.forward(&mut input_p, true);
             assert_eq!(serial.shape(), par.shape());
             let diff = max_diff(&serial, &par);
             assert!(
@@ -362,7 +359,7 @@ mod tests {
             let mut ps2 = Processor::<f32>::default();
             let mut pp2 = Processor::<f32>::default();
             let serial = ps2.backward(&mut freq_s, false);
-            let par    = pp2.backward(&mut freq_p, true);
+            let par = pp2.backward(&mut freq_p, true);
             assert_eq!(serial.shape(), par.shape());
             let diff = max_diff(&serial, &par);
             assert!(

@@ -58,9 +58,9 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
                     .par_chunks_mut(in_row_len)
                     .zip(out_slice.par_chunks_mut(out_row_len))
                     .for_each(|(in_row, out_row)| {
-                        let mut scratch =
-                            vec![Complex::new(T::zero(), T::zero()); scratch_len];
-                        rp.process_with_scratch(in_row, out_row, &mut scratch).unwrap();
+                        let mut scratch = vec![Complex::new(T::zero(), T::zero()); scratch_len];
+                        rp.process_with_scratch(in_row, out_row, &mut scratch)
+                            .unwrap();
                     });
             }
 
@@ -94,8 +94,7 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
                     .par_chunks_mut(row_len)
                     .zip(out_slice.par_chunks_mut(row_len))
                     .for_each(|(buf_row, out_row)| {
-                        let mut scratch =
-                            vec![Complex::new(T::zero(), T::zero()); scratch_len];
+                        let mut scratch = vec![Complex::new(T::zero(), T::zero()); scratch_len];
                         fft.process_outofplace_with_scratch(buf_row, out_row, &mut scratch);
                     });
             }
@@ -195,8 +194,7 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
                     .par_chunks_mut(row_len)
                     .zip(buf_slice.par_chunks_mut(row_len))
                     .for_each(|(in_row, buf_row)| {
-                        let mut scratch =
-                            vec![Complex::new(T::zero(), T::zero()); scratch_len];
+                        let mut scratch = vec![Complex::new(T::zero(), T::zero()); scratch_len];
                         fft.process_outofplace_with_scratch(in_row, buf_row, &mut scratch);
                     });
 
@@ -222,8 +220,7 @@ impl<T: ConvFftNum> ProcessorTrait<T, T> for Processor<T> {
                     .par_chunks_mut(in_row_len)
                     .zip(out_slice.par_chunks_mut(out_row_len))
                     .for_each(|(in_row, out_row)| {
-                        let mut scratch =
-                            vec![Complex::new(T::zero(), T::zero()); scratch_len];
+                        let mut scratch = vec![Complex::new(T::zero(), T::zero()); scratch_len];
                         let _ = rp.process_with_scratch(in_row, out_row, &mut scratch);
                     });
             }
@@ -487,7 +484,10 @@ mod tests {
         use super::*;
         use ndarray::Dimension;
 
-        fn max_diff_f64<const N: usize>(a: &Array<f64, Dim<[Ix; N]>>, b: &Array<f64, Dim<[Ix; N]>>) -> f64
+        fn max_diff_f64<const N: usize>(
+            a: &Array<f64, Dim<[Ix; N]>>,
+            b: &Array<f64, Dim<[Ix; N]>>,
+        ) -> f64
         where
             Dim<[Ix; N]>: Dimension,
         {
@@ -497,7 +497,10 @@ mod tests {
                 .fold(0.0_f64, f64::max)
         }
 
-        fn max_diff_f32<const N: usize>(a: &Array<f32, Dim<[Ix; N]>>, b: &Array<f32, Dim<[Ix; N]>>) -> f32
+        fn max_diff_f32<const N: usize>(
+            a: &Array<f32, Dim<[Ix; N]>>,
+            b: &Array<f32, Dim<[Ix; N]>>,
+        ) -> f32
         where
             Dim<[Ix; N]>: Dimension,
         {
@@ -529,12 +532,16 @@ mod tests {
             let mut ps = Processor::default();
             let mut pp = Processor::default();
             let serial = ps.forward(&mut input_s, false);
-            let par    = pp.forward(&mut input_p, true);
+            let par = pp.forward(&mut input_p, true);
             assert_eq!(serial.shape(), par.shape());
-            let diff = max_diff_complex(&serial.map(|c| Complex::new(c.re as f32, c.im as f32)),
-                                        &par.map(|c| Complex::new(c.re as f32, c.im as f32)));
+            let diff = max_diff_complex(
+                &serial.map(|c| Complex::new(c.re as f32, c.im as f32)),
+                &par.map(|c| Complex::new(c.re as f32, c.im as f32)),
+            );
             // use the raw f64 max diff instead
-            let diff64 = serial.iter().zip(par.iter())
+            let diff64 = serial
+                .iter()
+                .zip(par.iter())
                 .map(|(s, p)| ((s.re - p.re).abs()).max((s.im - p.im).abs()))
                 .fold(0.0_f64, f64::max);
             assert!(
@@ -551,7 +558,7 @@ mod tests {
             let mut ps = Processor::default();
             let mut pp = Processor::default();
             let serial = ps.forward(&mut input_s, false);
-            let par    = pp.forward(&mut input_p, true);
+            let par = pp.forward(&mut input_p, true);
             assert_eq!(serial.shape(), par.shape());
             let diff = max_diff_complex(&serial, &par);
             assert!(
@@ -563,14 +570,17 @@ mod tests {
 
         #[test]
         fn forward_3d_f64() {
-            let mut input_s = Array::from_shape_fn((4, 8, 8), |(i, j, k)| (i * 64 + j * 8 + k) as f64);
+            let mut input_s =
+                Array::from_shape_fn((4, 8, 8), |(i, j, k)| (i * 64 + j * 8 + k) as f64);
             let mut input_p = input_s.clone();
             let mut ps = Processor::<f64>::default();
             let mut pp = Processor::<f64>::default();
             let serial = ps.forward(&mut input_s, false);
-            let par    = pp.forward(&mut input_p, true);
+            let par = pp.forward(&mut input_p, true);
             assert_eq!(serial.shape(), par.shape());
-            let diff = serial.iter().zip(par.iter())
+            let diff = serial
+                .iter()
+                .zip(par.iter())
                 .map(|(s, p)| ((s.re - p.re).abs()).max((s.im - p.im).abs()))
                 .fold(0.0_f64, f64::max);
             assert!(
@@ -597,7 +607,7 @@ mod tests {
             pp2.rp_origin_len = ps.rp_origin_len;
 
             let serial = ps2.backward(&mut freq_s, false);
-            let par    = pp2.backward(&mut freq_p, true);
+            let par = pp2.backward(&mut freq_p, true);
             assert_eq!(serial.shape(), par.shape());
             let diff = max_diff_f32(&serial, &par);
             assert!(
@@ -609,7 +619,8 @@ mod tests {
 
         #[test]
         fn backward_3d_f64() {
-            let mut input = Array::from_shape_fn((4, 8, 8), |(i, j, k)| (i * 64 + j * 8 + k) as f64);
+            let mut input =
+                Array::from_shape_fn((4, 8, 8), |(i, j, k)| (i * 64 + j * 8 + k) as f64);
             let mut ps = Processor::<f64>::default();
             let mut freq_s = ps.forward(&mut input, false);
             let mut freq_p = freq_s.clone();
@@ -620,7 +631,7 @@ mod tests {
             pp2.rp_origin_len = ps.rp_origin_len;
 
             let serial = ps2.backward(&mut freq_s, false);
-            let par    = pp2.backward(&mut freq_p, true);
+            let par = pp2.backward(&mut freq_p, true);
             assert_eq!(serial.shape(), par.shape());
             let diff = max_diff_f64(&serial, &par);
             assert!(

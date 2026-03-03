@@ -665,8 +665,12 @@ mod par_vs_serial {
         let arr = array![1i32, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(|&x| x as f32);
         let ker = array![1i32, -1, 2].map(|&x| x as f32);
 
-        let serial = arr.conv_fft(&ker, ConvMode::Same, PaddingMode::Zeros).unwrap();
-        let par    = arr.conv_fft_par(&ker, ConvMode::Same, PaddingMode::Zeros).unwrap();
+        let serial = arr
+            .conv_fft(&ker, ConvMode::Same, PaddingMode::Zeros)
+            .unwrap();
+        let par = arr
+            .conv_fft_par(&ker, ConvMode::Same, PaddingMode::Zeros)
+            .unwrap();
         let diff = max_diff_f32(&serial, &par);
         assert!(
             diff < TOL_F32,
@@ -680,8 +684,12 @@ mod par_vs_serial {
         let arr = array![1i32, 2, 3, 4, 5, 6].map(|&x| x as f64);
         let ker = array![1i32, 2, 1].map(|&x| x as f64);
 
-        let serial = arr.conv_fft(&ker, ConvMode::Full, PaddingMode::Zeros).unwrap();
-        let par    = arr.conv_fft_par(&ker, ConvMode::Full, PaddingMode::Zeros).unwrap();
+        let serial = arr
+            .conv_fft(&ker, ConvMode::Full, PaddingMode::Zeros)
+            .unwrap();
+        let par = arr
+            .conv_fft_par(&ker, ConvMode::Full, PaddingMode::Zeros)
+            .unwrap();
         let diff = max_diff_f64(&serial, &par);
         assert!(
             diff < TOL_F64,
@@ -699,7 +707,7 @@ mod par_vs_serial {
 
         for mode in [ConvMode::Same, ConvMode::Valid, ConvMode::Full] {
             let serial = arr.conv_fft(&ker, mode, PaddingMode::Zeros).unwrap();
-            let par    = arr.conv_fft_par(&ker, mode, PaddingMode::Zeros).unwrap();
+            let par = arr.conv_fft_par(&ker, mode, PaddingMode::Zeros).unwrap();
             let diff = max_diff_f32(&serial, &par);
             assert!(
                 diff < TOL_F32,
@@ -715,8 +723,12 @@ mod par_vs_serial {
         let arr = Array::from_shape_fn((24, 24), |(i, j)| ((i * j) % 7) as f64);
         let ker = array![[1.0f64, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]];
 
-        let serial = arr.conv_fft(&ker, ConvMode::Same, PaddingMode::Replicate).unwrap();
-        let par    = arr.conv_fft_par(&ker, ConvMode::Same, PaddingMode::Replicate).unwrap();
+        let serial = arr
+            .conv_fft(&ker, ConvMode::Same, PaddingMode::Replicate)
+            .unwrap();
+        let par = arr
+            .conv_fft_par(&ker, ConvMode::Same, PaddingMode::Replicate)
+            .unwrap();
         let diff = max_diff_f64(&serial, &par);
         assert!(
             diff < TOL_F64,
@@ -731,11 +743,19 @@ mod par_vs_serial {
     fn three_d_same_f32() {
         let arr = Array::from_shape_fn((16, 16, 16), |(i, j, k)| ((i + j + k) % 5) as f32);
         let ker = Array::from_shape_fn((3, 3, 3), |(i, j, k)| {
-            if i == 1 && j == 1 && k == 1 { 8.0f32 } else { -1.0f32 }
+            if i == 1 && j == 1 && k == 1 {
+                8.0f32
+            } else {
+                -1.0f32
+            }
         });
 
-        let serial = arr.conv_fft(&ker, ConvMode::Same, PaddingMode::Zeros).unwrap();
-        let par    = arr.conv_fft_par(&ker, ConvMode::Same, PaddingMode::Zeros).unwrap();
+        let serial = arr
+            .conv_fft(&ker, ConvMode::Same, PaddingMode::Zeros)
+            .unwrap();
+        let par = arr
+            .conv_fft_par(&ker, ConvMode::Same, PaddingMode::Zeros)
+            .unwrap();
         let diff = max_diff_f32(&serial, &par);
         assert!(
             diff < TOL_F32,
