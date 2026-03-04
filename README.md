@@ -55,6 +55,13 @@ x_2d.conv_fft(
     PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
 );
 
+// enable `rayon` feature for parallel compute
+x_2d.conv_fft_par(
+    k_2d.with_dilation(2),
+    ConvMode::Same,
+    PaddingMode::Custom([BorderType::Reflect, BorderType::Circular]),
+);
+
 // avoid loss of accuracy for fft ver
 // convert Integer to Float before caculate.
 x_3d.map(|&x| x as f32)
@@ -130,6 +137,7 @@ fftconvolve_3d          time:   [11.991 ms 12.009 ms 12.031 ms]
 ```
 
 ## Versions
+- 0.6.1 - Add `rayon` feature for `conv_fft_par`.
 - 0.6.0 - Dependecy update: update ndarray from 0.16 to >=0.17.
 - 0.5.3 - Buf fix: error handling for kernel shape in convolution operation. Export GetProcessor as public trait for external consumer
 - 0.5.2 - Doc update.
