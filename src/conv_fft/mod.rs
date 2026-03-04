@@ -170,20 +170,7 @@ where
         padding_mode: PaddingMode<N, InElem>,
     ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>;
 
-    /// Performs a parallel FFT-accelerated convolution using a provided processor.
-    ///
-    /// This method combines the processor reuse benefit of `conv_fft_with_processor`
-    /// with the parallel execution of `conv_fft_par`.
-    ///
-    /// Only available when the `rayon` feature is enabled.
-    #[cfg(feature = "rayon")]
-    fn conv_fft_par_with_processor(
-        &self,
-        kernel: impl IntoKernelWithDilation<'a, SK, N>,
-        conv_mode: ConvMode<N>,
-        padding_mode: PaddingMode<N, InElem>,
-        fft_processor: &mut impl Processor<T, InElem>,
-    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>>;
+
 
     // fn conv_fft_bake(
     //     &self,
@@ -435,16 +422,7 @@ where
         conv_fft_proc_impl(self, kernel, conv_mode, padding_mode, &mut p, true)
     }
 
-    #[cfg(feature = "rayon")]
-    fn conv_fft_par_with_processor(
-        &self,
-        kernel: impl IntoKernelWithDilation<'a, SK, N>,
-        conv_mode: ConvMode<N>,
-        padding_mode: PaddingMode<N, InElem>,
-        fft_processor: &mut impl Processor<T, InElem>,
-    ) -> Result<Array<InElem, Dim<[Ix; N]>>, crate::Error<N>> {
-        conv_fft_proc_impl(self, kernel, conv_mode, padding_mode, fft_processor, true)
-    }
+
 }
 
 #[cfg(test)]

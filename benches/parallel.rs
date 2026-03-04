@@ -36,16 +36,7 @@ fn bench_parallel(c: &mut Criterion) {
             b.iter(|| x.conv_fft_par(&k, ConvMode::Same, PaddingMode::Zeros))
         });
 
-        c.bench_function("1d_fft_par_with_processor", |b| {
-            b.iter(|| {
-                x.conv_fft_par_with_processor(
-                    &k,
-                    ConvMode::Same,
-                    PaddingMode::Zeros,
-                    &mut fft_processor,
-                )
-            })
-        });
+
     }
 
     // ===== 2D benchmarks: medium data, small kernel =====
@@ -78,16 +69,7 @@ fn bench_parallel(c: &mut Criterion) {
             b.iter(|| x.conv_fft_par(&k, ConvMode::Same, PaddingMode::Zeros))
         });
 
-        c.bench_function("2d_500x500_k7_fft_par_proc", |b| {
-            b.iter(|| {
-                x.conv_fft_par_with_processor(
-                    &k,
-                    ConvMode::Same,
-                    PaddingMode::Zeros,
-                    &mut fft_processor,
-                )
-            })
-        });
+
     }
 
     // ===== 2D benchmarks: large data, small kernel =====
@@ -120,16 +102,7 @@ fn bench_parallel(c: &mut Criterion) {
             b.iter(|| x.conv_fft_par(&k, ConvMode::Same, PaddingMode::Zeros))
         });
 
-        c.bench_function("2d_2049x2049_k7_fft_par_proc", |b| {
-            b.iter(|| {
-                x.conv_fft_par_with_processor(
-                    &k,
-                    ConvMode::Same,
-                    PaddingMode::Zeros,
-                    &mut fft_processor,
-                )
-            })
-        });
+
     }
 
     // ===== 2D benchmarks: large data, larger kernel =====
@@ -162,16 +135,7 @@ fn bench_parallel(c: &mut Criterion) {
             b.iter(|| x.conv_fft_par(&k, ConvMode::Same, PaddingMode::Zeros))
         });
 
-        c.bench_function("2d_2049x2049_k31_fft_par_proc", |b| {
-            b.iter(|| {
-                x.conv_fft_par_with_processor(
-                    &k,
-                    ConvMode::Same,
-                    PaddingMode::Zeros,
-                    &mut fft_processor,
-                )
-            })
-        });
+
     }
 
     // ===== 2D benchmarks: medium data, medium kernel =====
@@ -200,16 +164,7 @@ fn bench_parallel(c: &mut Criterion) {
             b.iter(|| x.conv_fft_par(&k, ConvMode::Same, PaddingMode::Zeros))
         });
 
-        c.bench_function("2d_200x5000_k11x31_fft_par_proc", |b| {
-            b.iter(|| {
-                x.conv_fft_par_with_processor(
-                    &k,
-                    ConvMode::Same,
-                    PaddingMode::Zeros,
-                    &mut fft_processor,
-                )
-            })
-        });
+
     }
 
     // ===== 3D benchmarks =====
@@ -238,16 +193,7 @@ fn bench_parallel(c: &mut Criterion) {
             b.iter(|| x.conv_fft_par(&k, ConvMode::Same, PaddingMode::Zeros))
         });
 
-        c.bench_function("3d_fft_par_proc", |b| {
-            b.iter(|| {
-                x.conv_fft_par_with_processor(
-                    &k,
-                    ConvMode::Same,
-                    PaddingMode::Zeros,
-                    &mut fft_processor,
-                )
-            })
-        });
+
     }
 }
 

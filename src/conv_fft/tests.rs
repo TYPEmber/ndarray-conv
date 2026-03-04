@@ -620,7 +620,7 @@ mod vs_conv {
 }
 
 // ===== Parallel vs Serial FFT Consistency =====
-// Verify that conv_fft_par / conv_fft_par_with_processor produce bit-identical
+// Verify that conv_fft_par produces bit-identical
 // results compared to their serial counterparts.  Gated on the rayon feature.
 
 #[cfg(feature = "rayon")]
@@ -766,51 +766,9 @@ mod par_vs_serial {
 
     // ---- with_processor variants ----
 
-    #[test]
-    fn with_processor_2d_f32() {
-        let arr = Array::from_shape_fn((32, 32), |(i, j)| ((i + j) % 9) as f32);
-        let ker = array![[1.0f32, 0.0, -1.0], [2.0, 0.0, -2.0], [1.0, 0.0, -1.0]];
 
-        let mut proc_s = get_fft_processor::<f32, f32>();
-        let mut proc_p = get_fft_processor::<f32, f32>();
 
-        let serial = arr
-            .conv_fft_with_processor(&ker, ConvMode::Same, PaddingMode::Zeros, &mut proc_s)
-            .unwrap();
-        let par = arr
-            .conv_fft_par_with_processor(&ker, ConvMode::Same, PaddingMode::Zeros, &mut proc_p)
-            .unwrap();
 
-        let diff = max_diff_f32(&serial, &par);
-        assert!(
-            diff < TOL_F32,
-            "2D with_processor f32: conv_fft_par_with_processor vs conv_fft_with_processor max_diff = {:.3e}",
-            diff
-        );
-    }
-
-    #[test]
-    fn with_processor_3d_f64() {
-        let arr = Array::from_shape_fn((8, 8, 8), |(i, j, k)| ((i + j + k) % 6) as f64);
-        let ker = Array::from_shape_fn((3, 3, 3), |(_, _, _)| 1.0f64 / 27.0);
-
-        let mut proc_s = get_fft_processor::<f64, f64>();
-        let mut proc_p = get_fft_processor::<f64, f64>();
-
-        let serial = arr
-            .conv_fft_with_processor(&ker, ConvMode::Same, PaddingMode::Zeros, &mut proc_s)
-            .unwrap();
-        let par = arr
-            .conv_fft_par_with_processor(&ker, ConvMode::Same, PaddingMode::Zeros, &mut proc_p)
-            .unwrap();
-
-        let diff = max_diff_f64(&serial, &par);
-        assert!(
-            diff < TOL_F64,
-            "3D with_processor f64: conv_fft_par_with_processor vs conv_fft_with_processor max_diff = {:.3e}",
-            diff
-        );
-    }
 
     // ---- dilation ----
 

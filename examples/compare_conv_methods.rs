@@ -66,19 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap()
     });
 
-    // 5. conv_fft_par_with_processor  (rayon only)
-    #[cfg(feature = "rayon")]
-    let mut par_proc = get_fft_processor::<f32, f32>();
-    #[cfg(feature = "rayon")]
-    let (result_fft_par_proc, dur_fft_par_proc) = elapsed(|| {
-        data.conv_fft_par_with_processor(
-            &kernel,
-            ConvMode::Same,
-            PaddingMode::Replicate,
-            &mut par_proc,
-        )
-        .unwrap()
-    });
+
 
     let max_diff = |a: &Array2<f32>, b: &Array2<f32>| {
         a.iter()
@@ -119,14 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_diff(&result_conv, &result_fft_par),
         mean_diff(&result_conv, &result_fft_par)
     );
-    #[cfg(feature = "rayon")]
-    println!(
-        "{:<40} {:>12}   {:.3e}   {:.3e}",
-        "conv_fft_par_with_processor",
-        fmt_dur(dur_fft_par_proc),
-        max_diff(&result_conv, &result_fft_par_proc),
-        mean_diff(&result_conv, &result_fft_par_proc)
-    );
+
     println!();
 
     println!("{}", "=".repeat(80));
@@ -170,13 +151,7 @@ fn test_conv_modes(
             data.conv_fft_par(kernel, mode, PaddingMode::Replicate)
                 .unwrap()
         });
-        #[cfg(feature = "rayon")]
-        let mut par_proc = get_fft_processor::<f32, f32>();
-        #[cfg(feature = "rayon")]
-        let (result_fft_par_proc, dur_fft_par_proc) = elapsed(|| {
-            data.conv_fft_par_with_processor(kernel, mode, PaddingMode::Replicate, &mut par_proc)
-                .unwrap()
-        });
+
 
         println!("   output: {}x{}", result_conv.nrows(), result_conv.ncols());
         println!("{}", "-".repeat(60));
@@ -202,13 +177,7 @@ fn test_conv_modes(
             fmt_dur(dur_fft_par),
             max_diff(&result_conv, &result_fft_par)
         );
-        #[cfg(feature = "rayon")]
-        println!(
-            "{:<35} {:>10}   {:.3e}",
-            "conv_fft_par_with_processor",
-            fmt_dur(dur_fft_par_proc),
-            max_diff(&result_conv, &result_fft_par_proc)
-        );
+
         println!();
     }
 
